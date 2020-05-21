@@ -1,57 +1,68 @@
 import com.cubeone.*;
 
-public class CharEnc {
+public class SaltEnc {
 
     public static void main(String[] args) throws Exception {
 
         System.out.println("\n########################################################");
-        System.out.println("#########  CubeOneAPI-java Test : CharEnc    ###########");
+        System.out.println("#########  CubeOneAPI-java Test : SaltEnc    ###########");
         System.out.println("########################################################\n");
 
-        String item   = "AES256" ;
+        String item = "SHA256_SALT" ;
         byte[] bytErr = new byte[5];
 
-        String plain   = "1234567890123" ;
-        String encrypt = "" ;
-        String decrypt = "" ;
+        String passwd = "1234qwer";
+        String coencchar = "" ;
+        String cosaltsel = "" ;
 
         System.out.println("[1] Basic Check  ");
-        System.out.println(" - item  = [" + item + "]");
-        System.out.println(" - plain = [" + plain + "]");
-        System.out.println(" - plain.length() = [" + plain.length()+ "]\n");
+        System.out.println(" - item   = [" + item + "]");
+        System.out.println(" - passwd = [" + passwd + "]");
+        System.out.println(" - passwd.length() = [" + passwd.length()+ "]\n");
 
         ///////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////        
         System.out.println("[2] Enc Test ");
 
-        encrypt = CubeOneAPI.coencchar(plain,item,9,null,null,bytErr);
+        coencchar = CubeOneAPI.coencchar(passwd,item,10,null,null,bytErr);
+        
+        // success
+        if("00000".equals(new String(bytErr))) {
+            System.out.println(" - coencchar = [" + coencchar + "]");
+            System.out.println(" - coencchar.length() = [" + coencchar.length()+ "]\n");
+        }
+        // fail
+        else {
+            throw new Exception("Enc Fail_CubeOne_ErrCode = [" +  new String(bytErr) + "]\n");
+        }
+
+        ///////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////        
+        System.out.println("[3] Passwd Compare Test ");
+
+        cosaltsel = CubeOneAPI.cosaltsel(passwd,coencchar,256,bytErr);
 
         // success
         if("00000".equals(new String(bytErr))) {
-            System.out.println(" - coencchar = [" + encrypt + "]");
-            System.out.println(" - coencchar.length() = [" + encrypt.length()+ "]");
+            System.out.println(" - cosaltsel = [" + cosaltsel + "]");
+            System.out.println(" - cosaltsel.length() = [" + cosaltsel.length()+ "]\n");
+            
+            // compare ok
+            if(coencchar.equals(cosaltsel)) {
+                System.out.println("*** salt passwd verify ok !! ***");
+            } 
+            // compare fail
+            else {
+                System.out.println(" - salt passwd verify fail !!");
+                throw new Exception("Enc Fail_CubeOne_ErrCode = [salt passwd verify fail]");
+            }
         }
         // fail
         else {
             throw new Exception("Enc Fail_CubeOne_ErrCode = [" +  new String(bytErr) + "]");
         }
 
-        ///////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////
-        System.out.println("\n[3] Dec Test ");
-
-        decrypt = CubeOneAPI.codecchar(encrypt,item,10,null,null,bytErr);
-
-        // success
-        if("00000".equals(new String(bytErr))) {
-            System.out.println(" - codecchar = [" + decrypt + "]");
-            System.out.println(" - codecchar.length() = [" +decrypt.length() + "]");
-        }
-        // fail
-        else {
-            throw new Exception("Dec Fail_CubeOne_ErrCode = [" +  new String(bytErr) + "]");
-        }
-        System.out.println("\n#### Basic-Test :: Success..... !!!\n\n" );
+        System.out.println("\n#### Basic-Test :: Success..... !!!\n\n" );        
     }
 }
 
