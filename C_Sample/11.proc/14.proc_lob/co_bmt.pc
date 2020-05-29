@@ -1,0 +1,806 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <oci.h>
+#include <sqlca.h>
+#include <sqlcpr.h>
+
+#include "coapi_user.h"
+
+//#define DEBUG
+/* plain text buffer */
+#define BUFLEN_PLAIN 1024
+
+/* encrypted buffer */
+#ifdef BINARY
+	#define BUFLEN_ENC 1040
+#elif ASCII
+	#define BUFLEN_ENC 2080
+#else	// BASE64
+	#define BUFLEN_ENC 1388
+#endif
+
+/* function */
+void ferrcls();
+void errcls();
+void fcls();
+void cls();
+int lobins();
+int blobfileenc();	// read binary file & insert
+int blobfiledec();	// select & write binary file
+int clobfileenc();	// read text file & insert
+int clobfiledec();	// select & write text file
+
+int blobenc();
+int blobdec();
+int clobenc();
+int clobdec();
+
+/* parameter */
+	FILE *fp0, *fp1;
+	int loop = 1;
+
+	/* oracle connection parameter */
+	char item[30] = "SSN";
+	char id[32] = "test";
+	char pw[32] = "test";
+	char sid[10] = "ORA11";
+
+	/* input/output file name */
+	char blobinput[50] = "blob";
+	char bloboutput[50] = "blob.dec";
+	char clobinput[50] = "clob";
+	char cloboutput[50] = "clob.dec";
+
+	/* sql variables */
+	exec sql include sqlca;
+	exec sql begin declare section;
+		char con_data[60];
+		OCIBlobLocator *blob0, *blob1;
+		OCIClobLocator *clob0, *clob1;
+	exec sql end declare section;
+
+int main(int argc, char** args){
+	int ret = 0;
+
+	if(argc < 2){
+		printf("Usage: co_bmt <blobenc | blobdec | clobenc | clobdec>\n\n");
+		return 0;
+	}
+	if(argc > 2)
+		loop = atoi(args[2]);
+	
+	printf("#########################################\n");
+	printf("## CubeOneAPI- pro*C Self Test Program ##\n");
+	printf("#########################################\n\n");
+
+	memset(con_data, 0x00, sizeof(con_data));
+	sprintf(con_data, "%s/%s@%s", id, pw, sid);
+
+	#ifdef DEBUG
+		printf("connect [%s]\n", con_data);
+	#endif
+	exec sql connect :con_data;
+
+	if(sqlca.sqlcode < 0){
+		printf("connection fail [%s]\n\n", sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+
+	/*********************************/
+	/* Initializing Key  *************/
+	/*********************************/
+	/**************************************************************
+	** !!!!!! Very Important !!!!!
+	** 0) do not use coinit  ..if coinit is called many times then performance is bad ..
+	** 1) Call this Function only once for performance ..
+	** 2) CO_init_api ("API"); for Access Controll ..
+	**		- user : OS telnet account
+	**		- ip/mac : Terminal PC		  
+	** 3) CO_init (0, "API", "SA", "","","","","","","",100); is for Old-Version ..	
+	***************************************************************/
+	/*	ret = CO_init (bFirst, sSid, sUser, sNull, sNull, sNull, sNull, sNull, sNull, sNull, nSessionId);
+											ip Machine OsUser Program Module Terminal Psswd SeesionId */
+	/* ret = CO_init (0, "API", "SA", "","",	 "",	"",	 "",	"",	  "",   0); */
+
+	/*
+	ret = CO_init (0, "API", "cubeapi", "","",	 "",	"",	 "",	"",	  "",   0); 
+	ret = CO_init_api ("API");
+	*/
+	ret = CO_init_api ("API");
+
+	if (ret != CTR_SUCCESS) {
+		printf("<<< CubeLog :: CO_init failed. returned %d\n", ret);
+		exit(1);
+	}
+
+	if(strcmp(args[1], "blobfile") == 0){
+		exec sql truncate table zcube_lob_enc;
+		ret = blobfileenc();
+		if(ret == 0)
+			ret = blobfiledec();
+		fcls();
+	}else if(strcmp(args[1], "blobfiledec") == 0){
+		ret = blobfiledec();
+		fcls();
+	}else if(strcmp(args[1], "clobfile") == 0){
+		exec sql truncate table zcube_lob_enc;
+		ret = clobfileenc();
+		if(ret == 0)
+			ret = clobfiledec();
+		fcls();
+	}else if(strcmp(args[1], "clobfiledec") == 0){
+		ret = clobfiledec();
+		fcls();
+	}else if(strcmp(args[1], "blobenc") == 0){
+		exec sql truncate table zcube_lob_enc;
+		ret = blobenc();
+		cls();
+	}else if(strcmp(args[1], "blobdec") == 0){
+		exec sql truncate table zcube_lob_dec;
+		ret = blobdec();
+		cls();
+	}else if(strcmp(args[1], "clobenc") == 0){
+		exec sql truncate table zcube_lob_enc;
+		ret = clobenc();
+		cls();
+	}else if(strcmp(args[1], "clobdec") == 0){
+		exec sql truncate table zcube_lob_dec;
+		ret = clobdec();
+		cls();
+	}else if(strcmp(args[1], "ins") == 0){
+		exec sql truncate table zcube_lob;
+		ret = lobins();
+		cls();
+	}else
+		printf("invalid cmd\n");
+
+	printf("\n\n");
+	return ret;
+}
+
+void ferrcls(){
+	fclose(fp0);
+	errcls();
+}
+
+void errcls(){
+	exec sql rollback work release;
+	cls();
+	exit(5);
+}
+
+void fcls(){
+	fclose(fp0);
+	cls();
+}
+
+void cls(){
+	exec sql free :blob0;
+	exec sql free :blob1;
+	exec sql free :clob0;
+	exec sql free :clob1;
+}
+
+int blobfileenc(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1, offsetenc = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########## Binary file encrypt ##########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	printf("\n[1] Binary file test\n");
+	printf("<<< CubeLog :: file = [%s]\n", blobinput);
+
+	fp0 = fopen(blobinput, "r");
+	if(fp0 == NULL){
+		printf("[%s] open error\n", blobinput);
+		errcls();
+	}
+	memset(plain, 0x00, sizeof(plain));
+	memset(enc, 0x00, sizeof(enc));
+
+	// calculate file length
+	fseek(fp0, 0, SEEK_END);
+	datalen = ftell(fp0);
+	fseek(fp0, 0, SEEK_SET);
+	
+	printf("<<< CubeLog :: datalen = %ld\n", datalen);
+
+	memset(plain, 0x00, sizeof(plain));
+	memset(enc, 0x00, sizeof(enc));
+
+	exec sql var enc is raw(BUFLEN_ENC);	// initialize enc array for read blob data
+	exec sql allocate :blob0;	// allocate null blob column
+	exec sql insert into zcube_lob_enc values(1, :blob0, NULL);
+	exec sql select col_blob into :blob0 from zcube_lob_enc where col_num = 1 for update;	// initialize blob column
+
+	offset = 1;
+	offsetenc = 1;
+	while(datalen > offset){
+		#ifdef DEBUG
+			printf("datalen %d, cur %d\n", datalen, offset);
+		#endif
+
+		if(datalen - offset >= plainlen){
+			fread(plain, 1, plainlen, fp0);
+			ret = CO_enc_byte(plain, plainlen, item, 11, NULL, NULL, enc, &enclen);
+		}else{
+			ret = fread(plain, 1, datalen - offset + 1, fp0);
+			ret = CO_enc_byte(plain, ret, item, 11, NULL, NULL, enc, &enclen);
+		}
+
+		if(ret != 0){
+			printf("enc fail [%d]\n", ret);
+			errcls();
+		}
+
+		#ifdef DEBUG
+			printf("enc\n[%s]\n", enc);
+		#endif
+
+		exec sql lob write one :enclen from :enc with length :enclen into :blob0 at :offsetenc;	// insert into blob
+		offset += plainlen;	// move blob offset;
+		offsetenc += enclen;
+		memset(plain, 0x00, sizeof(plain));
+		memset(enc, 0x00, sizeof(enc));
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	printf("%d byte inserted\n", offset);
+	return ret;
+}
+
+int blobfiledec(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########## Binary file decrypt ##########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	printf("\n[1] Binary file test\n");
+	printf("<<< CubeLog :: file = [%s]\n", blobinput);
+
+	fp0 = fopen(bloboutput, "w");
+	if(fp0 == NULL){
+		printf("[%s] file open error\n", bloboutput);
+		errcls();
+	}
+
+	exec sql var enc is raw(BUFLEN_ENC);
+	exec sql allocate :blob0;
+	exec sql select col_blob into :blob0 from zcube_lob_enc where col_num = 1;
+	exec sql lob describe :blob0 get length into :datalen;
+
+	if(datalen == 0){
+		printf("null blob data\n");
+		errcls();
+	}
+
+	offset = 1;
+	while(datalen > offset){
+		memset(enc, 0x00, sizeof(enc));
+		memset(plain, 0x00, sizeof(plain));
+		#ifdef DEBUG
+			printf("datalen %d, cur %d\n", datalen, offset);
+		#endif
+		exec sql lob read :enclen from :blob0 at :offset into :enc;
+
+		#ifdef DEBUG
+			printf("enc\n[%s]\n\n", enc);
+		#endif
+
+		ret = CO_dec_byte(enc, strlen(enc), item, 10, NULL, NULL, plain, &plainlen);
+
+		if(ret != 0){
+			printf("dec fail [%d]\n", ret);
+			errcls();
+		}
+
+		#ifdef DEBUG
+			printf("dec\n[%s]\n\n", plain);
+		#endif
+
+		ret = fwrite(plain, plainlen, 1, fp0);
+		if(ret < 0){
+			printf("blob output file write error\n");
+			errcls();
+		}
+		offset += enclen;	// move offset
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	printf("%d byte decrypted\n", ftell(fp0));
+	return 0;
+}
+
+int clobfileenc(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########### Text file encrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	printf("\n[1] Text file test\n");
+	printf("<<< CubeLog :: file = [%s]\n", clobinput);
+	
+	memset(plain, 0x00, sizeof(plain));
+	memset(enc, 0x00, sizeof(enc));
+
+	fp0 = fopen(clobinput, "r");
+	if(fp0 == NULL){
+		printf("[%s] file open error\n", clobinput);
+		errcls();
+	}
+
+	exec sql allocate :clob0;
+	exec sql insert into zcube_lob_enc values (1, NULL, :clob0);
+	exec sql select col_clob into :clob0 from zcube_lob_enc where col_num = 1 for update;
+
+	offset = 1;
+	while(fread(plain, 1, BUFLEN_PLAIN, fp0) > 0){
+		#ifdef DEBUG
+			printf("plain\n[%s]\n\n", plain);
+		#endif
+
+		ret = CO_enc_char(plain, item, 11, NULL, NULL, enc, &enclen);
+
+		if(ret != 0){
+			printf("enc fail [%d]\n", ret);
+			errcls();
+		}
+
+		#ifdef DEBUG
+			printf("enc\n[%s]\n\n", enc);
+		#endif
+
+		exec sql lob write one :enclen from :enc with length :enclen into :clob0 at :offset;
+		offset += enclen;
+		memset(plain, 0x00, sizeof(plain));
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	printf("%d byte inserted\n", ftell(fp0));
+	return 0;
+}
+
+int clobfiledec(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########### Text file decrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	printf("\n[1] Text file test\n");
+	printf("<<< CubeLog :: file = [%s]\n", clobinput);
+	
+	fp0 = fopen(cloboutput, "w");
+	if(fp0 == NULL){
+		printf("[%s] file open error\n", cloboutput);
+		errcls();
+	}
+
+	exec sql allocate :clob0;
+	exec sql select col_clob into :clob0 from zcube_lob_enc where col_num = 1;
+	exec sql lob describe :clob0 get length into :datalen;
+
+	if(datalen == 0){
+		printf("null clob data\n");
+		errcls();
+	}
+
+	offset = 1;
+	while(datalen > offset){
+		memset(enc, 0x00, sizeof(enc));
+		memset(plain, 0x00, sizeof(plain));
+		exec sql lob read :enclen from :clob0 at :offset into :enc;
+
+		#ifdef DEBUG
+			printf("enc\n[%s]\n\n", enc);
+		#endif
+
+		ret = CO_dec_char(enc, strlen(enc), item, 10, NULL, NULL, plain);
+
+		if(ret != 0){
+			printf("dec fail [%d]\n", ret);
+			errcls();
+		}
+
+		ret = fwrite(plain, strlen(plain), 1, fp0);
+		if(ret < 0){
+			printf("blob output file write error\n");
+			errcls();
+		}
+
+		#ifdef DEBUG
+			printf("dec\n[%s]\n\n", plain);
+		#endif
+
+		offset += enclen;
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	printf("%d byte decrypted\n", offset);
+	return 0;
+}
+
+int blobenc(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC, count = 0;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1, offsetenc = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########### Blob data encrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	memset(plain, 0x00, sizeof(plain));
+	memset(enc, 0x00, sizeof(enc));
+
+	exec sql allocate :blob0;
+	exec sql allocate :blob1;
+	exec sql var plain is raw(BUFLEN_PLAIN + 1);
+	exec sql var enc is raw(BUFLEN_ENC + 1);
+
+	for(count = 0; count < loop; count++){
+		exec sql select col_blob into :blob0 from zcube_lob where col_num = :count;	// initialize blob column
+		exec sql lob describe :blob0 get length into :datalen;
+		exec sql insert into zcube_lob_enc values(:count, :blob1, NULL);
+		exec sql select col_blob into :blob1 from zcube_lob_enc where col_num = :count for update;	// initialize blob column
+
+		offset = 1;
+		offsetenc = 1;
+		while(datalen > offset){
+			exec sql lob read :plainlen from :blob0 at :offset into :plain;
+
+			if(datalen - offset >= plainlen)
+				ret = CO_enc_byte(plain, plainlen, item, 11, NULL, NULL, enc, &enclen);
+			else
+				ret = CO_enc_byte(plain, datalen - offset + 1, item, 11, NULL, NULL, enc, &enclen);
+
+			if(ret != 0){
+				printf("enc fail [%d]\n", ret);
+				errcls();
+			}
+
+			#ifdef DEBUG
+				printf("enc\n[%s]\n", enc);
+			#endif
+
+			exec sql lob write one :enclen from :enc with length :enclen into :blob1 at :offsetenc;	// insert into blob
+			offset += plainlen;	// move blob offset;
+			offsetenc += enclen;
+			memset(plain, 0x00, sizeof(plain));
+			memset(enc, 0x00, sizeof(enc));
+		}
+
+		printf("<<< CubeLog :: datalen = %ld, encrypted = %ld\n", datalen, offsetenc);
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	return 0;
+}
+
+int blobdec(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC, count = 0;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1, offsetenc = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########### Blob data decrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	memset(enc, 0x00, sizeof(enc));
+	memset(plain, 0x00, sizeof(plain));
+
+	exec sql allocate :blob0;
+	exec sql allocate :blob1;
+	exec sql var enc is raw(BUFLEN_ENC);
+	exec sql var plain is raw(BUFLEN_PLAIN);
+
+	for(count = 0; count < loop; count++){
+		exec sql select col_blob into :blob0 from zcube_lob_enc where col_num = :count;
+		exec sql lob describe :blob0 get length into :datalen;
+		exec sql insert into zcube_lob_dec values(:count, :blob1, NULL);
+		exec sql select col_blob into :blob1 from zcube_lob_dec where col_num = :count for update;	// initialize blob column
+
+		offset = 1;
+		offsetenc = 1;
+		while(datalen > offsetenc){
+			exec sql lob read :enclen from :blob0 at :offsetenc into :enc;
+
+			#ifdef DEBUG
+				printf("enc\n[%s]\n\n", enc);
+			#endif
+
+			ret = CO_dec_byte(enc, strlen(enc), item, 10, NULL, NULL, plain, &plainlen);
+
+			if(ret != 0){
+				printf("dec fail [%d]\n", ret);
+				errcls();
+			}
+
+			#ifdef DEBUG
+				printf("dec\n[%s]\n\n", plain);
+			#endif
+
+			exec sql lob write one :plainlen from :plain with length :plainlen into :blob1 at :offset;
+			offset += plainlen;	// move blob offset;
+			offsetenc += enclen;
+
+			memset(enc, 0x00, sizeof(enc));
+			memset(plain, 0x00, sizeof(plain));
+		}
+
+		printf("<<< CubeLog :: datalen = %ld, decrypted = %ld\n", datalen, offset);
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	return 0;
+}
+
+int clobenc(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC, count = 0;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1, offsetenc = 1;
+	exec sql end declare section;
+	
+	printf("#########################################\n");
+	printf("########### Clob data encrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	memset(plain, 0x00, sizeof(plain));
+	memset(enc, 0x00, sizeof(enc));
+
+	exec sql allocate :clob0;
+	exec sql allocate :clob1;
+
+	for(count = 0; count < loop; count++){
+		exec sql select col_clob into :clob0 from zcube_lob where col_num = :count;
+		exec sql lob describe :clob0 get length into :datalen;
+		exec sql insert into zcube_lob_enc values(:count, NULL, :clob1);
+		exec sql select col_clob into :clob1 from zcube_lob_enc where col_num = :count for update;
+
+		offset = 1;
+		offsetenc = 1;
+		while(datalen > offset){
+			exec sql lob read :plainlen from :clob0 at :offset into :plain;
+
+			#ifdef DEBUG
+				printf("plain\n[%s]\n\n", plain);
+			#endif
+
+			ret = CO_enc_char(plain, item, 11, NULL, NULL, enc, &enclen);
+
+			#ifdef DEBUG
+				printf("enc\n[%s]\n\n", enc);
+			#endif
+
+			if(ret != 0){
+				printf("enc fail [%d]\n", ret);
+				errcls();
+			}
+			exec sql lob write one :enclen from :enc with length :enclen into :clob1 at :offsetenc;
+			offset += plainlen;
+			offsetenc += enclen;
+			memset(plain, 0x00, sizeof(plain));
+			memset(enc, 0x00, sizeof(enc));
+		}
+
+		printf("<<< CubeLog :: datalen = %ld, encrypted = %ld\n", datalen, offsetenc);
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	return 0;
+}
+
+int clobdec(){
+	int ret = 0;
+	exec sql begin declare section;
+		int plainlen = BUFLEN_PLAIN, enclen = BUFLEN_ENC, count = 0;
+		unsigned char plain[BUFLEN_PLAIN + 1], enc[BUFLEN_ENC + 1];
+		unsigned long datalen = 0, offset = 1, offsetenc = 1;
+	exec sql end declare section;
+
+	printf("#########################################\n");
+	printf("########### Clob data decrypt ###########\n");
+	printf("#########################################\n\n");
+
+	printf("\n<<< CubeLog :: ITEM = [%s]\n", item);
+	memset(enc, 0x00, sizeof(enc));
+	memset(plain, 0x00, sizeof(plain));
+
+	exec sql allocate :clob0;
+	exec sql allocate :clob1;
+
+	for(count = 0; count < loop; count++){
+		exec sql select col_clob into :clob0 from zcube_lob_enc where col_num = :count;
+		exec sql lob describe :clob0 get length into :datalen;
+		exec sql insert into zcube_lob_dec values(:count, NULL, :clob1);
+		exec sql select col_clob into :clob1 from zcube_lob_dec where col_num = :count for update;
+
+		offset = 1;
+		offsetenc = 1;
+		while(datalen > offsetenc){
+			exec sql lob read :enclen from :clob0 at :offsetenc into :enc;
+
+			#ifdef DEBUG
+				printf("enc\n[%s]\n\n", enc);
+			#endif
+
+			ret = CO_dec_char(enc, strlen(enc), item, 10, NULL, NULL, plain);
+
+			if(ret != 0){
+				printf("dec fail [%d]\n", ret);
+				errcls();
+			}
+
+			#ifdef DEBUG
+				printf("dec\n[%s]\n\n", plain);
+			#endif
+
+			if(strlen(plain) < plainlen)
+				plainlen = strlen(plain);
+
+			exec sql lob write one:plainlen from :plain with length :plainlen into :clob1 at :offset;
+			offset += plainlen;
+			offsetenc += enclen;
+			memset(enc, 0x00, sizeof(enc));
+			memset(plain, 0x00, sizeof(plain));
+		}
+
+		printf("<<< CubeLog :: datalen = %ld, decrypted = %ld\n", datalen, offset);
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		errcls();
+	}
+	return 0;
+}
+
+int lobins(){
+	int ret = 0;
+
+	exec sql begin declare section;
+		int count = 0, plainlen = BUFLEN_PLAIN;
+		unsigned char plainb[BUFLEN_PLAIN + 1], plainc[BUFLEN_PLAIN + 1];
+		unsigned long offset = 1, datalen = 0;
+		exec sql var plainb is raw(BUFLEN_PLAIN + 1);	// initialize enc array for read blob data
+	exec sql end declare section;
+
+	exec sql allocate :blob0;
+	exec sql allocate :clob0;
+	
+	printf("#########################################\n");
+	printf("########## LOB test data insert #########\n");
+	printf("#########################################\n\n");
+
+	memset(plainb, 0x00, sizeof(plainb));
+	memset(plainc, 0x00, sizeof(plainb));
+
+	for(count = 0; count < loop; count++){
+		exec sql insert into zcube_lob values(:count, :blob0, :clob0);
+		exec sql select col_blob into :blob0 from zcube_lob where col_num = :count for update;
+		exec sql select col_clob into :clob0 from zcube_lob where col_num = :count for update;
+
+		sprintf(blobinput, "blob%d", count);
+		#ifdef DEBUG
+			printf("blobfile %s open\n", blobinput);
+		#endif
+		fp0 = fopen(blobinput, "r");
+		if(fp0 == NULL){
+			printf("blobfile [%s] open error\n", blobinput);
+			errcls();
+		}
+		sprintf(clobinput, "clob%d", count);
+		#ifdef DEBUG
+			printf("clobfile %s open\n", clobinput);
+		#endif
+		fp1 = fopen(clobinput, "r");
+		if(fp1 == NULL){
+			printf("clobfile [%s] open error\n", clobinput);
+			ferrcls();
+		}
+
+		fseek(fp0, 0, SEEK_END);
+		datalen = ftell(fp0);
+		fseek(fp0, 0, SEEK_SET);
+
+		offset = 1;
+		while(datalen > offset){
+			if(datalen - offset >= plainlen)
+				fread(plainb, 1, plainlen, fp0);
+			else
+				plainlen = fread(plainb, 1, datalen - offset + 1, fp0);
+
+			exec sql lob write one :plainlen from :plainb with length :plainlen into :blob0 at :offset;
+			offset += plainlen;
+			memset(plainb, 0x00, sizeof(plainb));
+		}
+		fclose(fp0);
+		printf("blobfile [%s] [%d] byte inserted\n", blobinput, datalen);
+
+		fseek(fp1, 0, SEEK_END);
+		datalen = ftell(fp1);
+		fseek(fp1, 0, SEEK_SET);
+
+		offset = 1;
+		plainlen = BUFLEN_PLAIN;
+		while(datalen > offset){
+			if(datalen - offset >= plainlen)
+				fread(plainc, 1, plainlen, fp1);
+			else
+				plainlen = fread(plainc, 1, datalen - offset + 1, fp1);
+
+			exec sql lob write one :plainlen from :plainc with length :plainlen into :clob0 at :offset;
+			offset += plainlen;
+			memset(plainc, 0x00, sizeof(plainc));
+		}
+		fclose(fp1);
+		printf("clobfile [%s] [%d] byte inserted\n", clobinput, datalen);
+	}
+	exec sql commit work;
+	if(sqlca.sqlcode != 0){
+		printf("insert fail\n[%d] [%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+		fclose(fp1);
+		ferrcls();
+	}
+	return 0;
+}

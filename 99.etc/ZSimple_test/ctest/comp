@@ -1,0 +1,13 @@
+# -for HPi64
+# CCHOME=/opt/ansic/bin
+# SHLIB_PATH=$HOME/lib
+# $CCHOME/cc -o cotest cotest.c -DHPUX +DD64 -DBIT64 -I$HOME/include -L$HOME/lib -lCOencapi
+# - for AIX
+# CCHOME=/usr/vac/bin
+# LIBPATH=$HOME/lib
+# $CCHOME/cc -o cotest cotest.c -brtl -q32 -L$HOME/lib -I$HOME/include -lCOencapi
+# - for Linux
+# CCHOME=/usr/bin
+# LD_LIBRARY_PATH=$HOME/lib
+# $CCHOME/cc -o gatest gatest.c -L$HOME/lib -I$HOME/include -lCOencapi
+/usr/bin/cc -o cotest cotest.c -L/home/cubeapi/lib/ -lCOencapi -I/home/cubeapi/include

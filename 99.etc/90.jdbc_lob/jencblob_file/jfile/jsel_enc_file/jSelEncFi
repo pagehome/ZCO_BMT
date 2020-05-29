@@ -1,0 +1,72 @@
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.sql.ResultSet;
+
+import com.cubeone.CubeOneAPI;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.ByteArrayInputStream;
+
+import oracle.sql.BLOB;
+public class jSelEncFile {
+	public static void main(String args[]){
+
+		byte[] errbyte = new byte[6];
+		CubeOneAPI coc = new CubeOneAPI();
+		coc.coinit (1, "API2", "SA","","","","","","","",100);
+
+		ResultSet rs = null;
+		Connection con=null;
+		Statement stmt = null;
+
+		String encblob = null;
+		BLOB outVal = null;
+
+		String jdb="jdbc:oracle:thin:@192.168.1.70:1521:ORA11";
+		String dbid="test";
+		String dbpw="test";
+
+		InputStream in = null;
+		int count = 0;
+
+		try {
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+			con = DriverManager.getConnection(jdb,dbid,dbpw);
+			stmt = con.createStatement();
+
+			String SQL = "SELECT COL_NUMBER, COL_BLOB FROM BMT28 WHERE COL_NUMBER = 1 ";
+			rs = stmt.executeQuery(SQL);
+			FileOutputStream fos = null;
+
+			while( rs.next()) {
+				/*file Save */
+				fos = new FileOutputStream("./" + rs.getInt(1));
+				oracle.sql.BLOB blob = jenc.jencblobins(con,(oracle.sql.BLOB)rs.getBlob(2));
+				byte[] buffer = new byte[(int) blob.length()];
+				in = blob.getBinaryStream();
+				count = in.read(buffer);
+				if(count == -1)
+					break;
+				fos.write(buffer,0,count);	
+			}
+			fos.close();
+			System.out.println("SQL END");
+
+		}catch(SQLException ee){
+			ee.printStackTrace();                                             
+		}catch(Exception e){
+			e.printStackTrace();         
+		}finally{                                                                
+			try{rs.close();}catch(Exception e){}                             
+			try{stmt.close();}catch(Exception e){}                          
+			try{con.close();}catch(Exception e){}                           
+		}
+	}
+}
+

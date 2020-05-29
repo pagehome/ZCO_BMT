@@ -1,0 +1,15 @@
+# for HPI 32bit
+#JAVAHOME=/opt/java1.5/bin
+# for HPI 64bit
+#JAVAHOME=/opt/java1.5/bin/IA64W
+# for AIX 32bit
+# JAVAHOME=/usr/java5/bin
+# for AIX 64bit
+# JAVAHOME=/usr/java5_64/bin
+# for Linux
+# JAVAHOME=/usr/bin/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/lib
+export LIBPATH=$LIBPATH:$HOME/lib
+export SHLIB_PATH=$SHLIB_PATH:$HOME/lib       
+javac -classpath $HOME/lib/CubeOneAPI.jar cotest.java
+java -classpath $HOME/lib/CubeOneAPI.jar cotest

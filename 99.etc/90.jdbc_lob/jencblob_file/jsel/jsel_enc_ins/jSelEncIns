@@ -1,0 +1,64 @@
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
+import com.cubeone.CubeOneAPI;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.ByteArrayInputStream;
+
+import oracle.sql.BLOB;
+public class jSelEncIns {
+	public static void main(String args[]){
+
+		byte[] errbyte = new byte[6];
+		CubeOneAPI coc = new CubeOneAPI();
+		coc.coinit (1, "API", "SA","","","","","","","",100);
+
+		ResultSet rs = null;
+		Connection con=null;
+		Statement stmt = null;
+		PreparedStatement pstmt = null;
+
+		String jdb="jdbc:oracle:thin:@192.168.1.70:1521:ORA11";
+		String dbid="test";
+		String dbpw="test";
+
+		try {
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+			con = DriverManager.getConnection(jdb,dbid,dbpw);
+			stmt = con.createStatement();
+
+			String SQL = "SELECT COL_BLOB FROM BMT28 WHERE COL_NUMBER = 1 ";
+			rs = stmt.executeQuery(SQL);
+			SQL = "INSERT INTO BMT28 (COL_BLOB) VALUES ( ? ) ";
+			pstmt = con.prepareStatement(SQL);
+
+			while( rs.next()) {
+				oracle.sql.BLOB blob = jenc.jencblobins(con,(oracle.sql.BLOB)rs.getBlob(1));
+				pstmt.setBlob(1, (java.sql.Blob)blob);
+				pstmt.executeUpdate();
+				con.commit();
+				pstmt.clearParameters();	
+			}
+			System.out.println("SQL END");
+
+		}catch(SQLException ee){
+			ee.printStackTrace();                                             
+		}catch(Exception e){
+			e.printStackTrace();         
+		}finally{                                                                
+			try{rs.close();}catch(Exception e){}                             
+			try{stmt.close();}catch(Exception e){}                          
+			try{pstmt.close();}catch(Exception e){}                          
+			try{con.close();}catch(Exception e){}                           
+		}
+	}
+}
+

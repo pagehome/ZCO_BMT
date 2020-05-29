@@ -2,10 +2,29 @@
 <classpath>
 	<classpathentry kind="src" path="01.basic"/>
 	<classpathentry kind="src" path="02.advance"/>
-	<classpathentry excluding="01/jdbc/|01.jdbc/|02/table/|02.table/" kind="src" path="03.util"/>
-	<classpathentry kind="src" path="03.util/01.jdbc"/>
-	<classpathentry kind="src" path="03.util/02.table"/>
+	<classpathentry excluding="01/jdbc/|01.jdbc/|02/table/|02.table/|01/prompt/|01.prompt/|02/speed/|02.speed/|03/ordering/|03.ordering/" kind="src" path="03.util"/>
+	<classpathentry kind="src" path="03.util/01.prompt"/>
+	<classpathentry kind="src" path="03.util/02.speed"/>
+	<classpathentry kind="src" path="03.util/03.ordering"/>
+	<classpathentry kind="src" path="04.file/01.unix.asc"/>
+	<classpathentry kind="src" path="93.file_enc"/>
+	<classpathentry kind="src" path="92.jdbc_batch/insert"/>
+	<classpathentry kind="src" path="92.jdbc_batch/select"/>
+	<classpathentry kind="src" path="92.jdbc_batch/update"/>
+	<classpathentry kind="src" path="10.hangul/01.basic"/>
+	<classpathentry kind="src" path="10.hangul/02.jdbc"/>
+	<classpathentry kind="src" path="11.jdbc/01.basic_board"/>
+	<classpathentry kind="src" path="11.jdbc/02.data_type"/>
+	<classpathentry kind="src" path="11.jdbc/03.clob"/>
+	<classpathentry kind="src" path="11.jdbc/04.blob"/>
+	<classpathentry kind="src" path="90.bmt_spec"/>
+	<classpathentry kind="src" path="50.dongbu_hangul"/>
+	<classpathentry kind="src" path="31.wrap/02.K"/>
+	<classpathentry kind="src" path="31.wrap/01.basic"/>
+	<classpathentry kind="src" path="30.QA/01.basic"/>
+	<classpathentry kind="src" path="30.QA/02.thread"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="var" path="CUBEONE_LIB"/>
+	<classpathentry kind="lib" path="D:/ojdbc7.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

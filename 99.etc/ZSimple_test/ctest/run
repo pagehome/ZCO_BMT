@@ -1,0 +1,4 @@
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/lib
+export LIBPATH=$LIBPATH:$HOME/lib   
+export SHLIB_PATH=$SHLIB_PATH:$HOME/lib       
+./tchar 
