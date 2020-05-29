@@ -1,5 +1,6 @@
 import com.cubeone.*;
 
+
 public class SaltEnc {
 
     public static void main(String[] args) throws Exception {
@@ -67,6 +68,7 @@ public class SaltEnc {
 }
 
 /*
+ * 
 20007   No Privileges to access encrypted column    COER_NOTALLOWEDS
 20008   Item is not specified                       COER_NOITEM_ENTEREDS
 20009   Fail to get OCI Environment                 COER_FAIL_GET_OCIENVS
@@ -89,5 +91,6 @@ public class SaltEnc {
 20032   error when shmat ENOMEM.                    COER_SHMATENOMEM
 20033   error when shmat EINVAL.                    COER_SHMATEINVAL
 20034   error for Admin Act.: Ver 2.5-9021-C        COER_ADMINACTION
+
 */
 
