@@ -1,0 +1,136 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/timeb.h>
+#include <string.h>
+
+#include "coapi_user.h" 
+/*EXEC SQL INCLUDE coapi_user;*/
+
+EXEC SQL INCLUDE SQLCA;
+
+char plain[100] = "1234567890123";
+char item[10] = "AES256";
+
+char encOut[2000];
+int nDecLen, nEncLen, nRtn;
+
+void selDualPlg();
+void selDualAPI();
+
+void sql_error(char *routine)
+{
+    char message_buffer[512];
+    size_t buffer_size;
+    size_t message_length;
+
+    /* Turn off the call to sql_error() to avoid a possible infinite loop */
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    printf("\nOracle error while executing %s!\n", routine);
+
+    /* Use sqlglm() to get the full text of the error message. */
+    buffer_size = sizeof(message_buffer);
+    sqlglm(message_buffer, &buffer_size, &message_length);
+    printf("%.*s\n", message_length, message_buffer);
+
+    EXEC SQL ROLLBACK WORK RELEASE;
+
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+
+    printf("################################################\n");
+    printf("###### CubeOne API SelfTest : PRO*C TEST #######\n");
+    printf("################################################\n\n");
+
+    /* Connect to DB */
+    EXEC SQL BEGIN DECLARE SECTION;
+        /*char userid[40]= "scott/one123@ORCL";*/
+        char userid[40]= "scott/one123";
+    EXEC SQL END DECLARE SECTION;
+
+    printf("<<< main :: id/pass = [%s]\n", userid);
+
+    EXEC SQL CONNECT :userid;
+
+    if (sqlca.sqlcode < 0)
+    {
+        printf("<<< main :: %s\n", sqlca.sqlerrm.sqlerrmc);
+        EXEC SQL ROLLBACK WORK RELEASE;
+        exit(0);
+    }
+
+/*
+	nRtn = CO_init_api("API");
+
+    if (nRtn != CTR_SUCCESS) {
+        printf("<<< CubeLog :: CO_init failed. returned %d\n", nRtn);
+        exit(1);
+    }
+*/
+    printf("<<< main :: plain = [%s]\n", plain);
+    printf("<<< main :: item = [%s]\n", item);
+    printf("\n");
+
+	selDualPlg();
+    testStrAPI();
+
+    EXEC SQL COMMIT WORK RELEASE;
+    return 0;
+}
+
+void selDualAPI() {
+
+    printf ("<<< selDualAPI() :: start !!!!!\n" );
+
+
+    printf ("<<< selDualAPI() :: end !!!!!\n\n" );
+}
+
+void selDualPlg() {
+
+    printf ("<<< selDualPlg() :: start !!!!!\n" );
+
+    EXEC SQL BEGIN DECLARE SECTION;
+            VARCHAR enc[100+1];
+    EXEC SQL END DECLARE SECTION;
+
+    /*****************************************************************/
+	char stmt[20000];
+    memset(stmt, 0x00, sizeof(stmt));
+
+    sprintf(stmt, "SELECT xx1.enc_varchar2_ins(:plain,10,:item) FROM DUAL");
+    EXEC SQL PREPARE SEL_PRE FROM :stmt;
+
+    EXEC SQL DECLARE C2 CURSOR FOR SEL_PRE;
+    EXEC SQL OPEN C2 USING :plain, :item  ;
+
+    printf(" - sql = [%s]\n", stmt);
+
+    EXEC SQL WHENEVER NOT FOUND DO break;
+    while(1)
+    {
+        memset(&enc, 0x00, sizeof(enc));
+
+        EXEC SQL FETCH C2 INTO
+            :enc ;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog :: selectEncTable() : sqlca.sqlcode = [%d]\n", sqlca.sqlcode);
+            printf("<<< CubeLog :: selectEncTable() : %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C2;
+            exit(-1);
+        }
+
+        printf (" - enc = [%s]\n" , enc.arr);
+
+    }
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C2;
+
+    printf ("<<< selDualPlg() :: end !!!!!\n\n" );
+}
+

@@ -1,0 +1,355 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+//#include <sqlca.h>
+#include <pthread.h>
+#include "coapi_user.h" 
+
+/* Function prototypes */
+void err_report();
+void do_transaction();
+void get_transaction();
+void logon();
+void logoff();
+
+#define CONNINFO "scott/one123"
+
+
+#define THREADS 5
+#define ARRAY_LENGTH 20000
+
+EXEC SQL INCLUDE SQLCA;
+
+struct parameters
+{ 
+	sql_context * ctx;
+	int thread_id;
+};
+
+typedef struct parameters parameters;
+
+struct record_log
+{ 
+	char action;
+	unsigned int from_account;
+	unsigned int to_account;
+	float amount;
+};
+
+typedef struct record_log record_log;
+
+record_log records[]= { 
+ { 'M', 10001, 10002, 12.50 },
+ { 'M', 10001, 10003, 25.00 },
+ { 'M', 10001, 10003, 123.00 },
+ { 'M', 10001, 10003, 125.00 },
+ { 'M', 10002, 10006, 12.23 },
+ { 'M', 10007, 10008, 225.23 },
+ { 'M', 10002, 10008, 0.70 },
+ { 'M', 10001, 10003, 11.30 },
+ { 'M', 10003, 10002, 47.50 },
+ { 'M', 10002, 10006, 125.00 },
+ { 'M', 10007, 10008, 225.00 },
+ { 'M', 10002, 10008, 0.70 },
+ { 'M', 10001, 10003, 11.00 },
+ { 'M', 10003, 10002, 47.50 },
+ { 'M', 10002, 10006, 125.00 },
+ { 'M', 10007, 10008, 225.00 },
+ { 'M', 10002, 10008, 0.70 },
+ { 'M', 10001, 10003, 11.00 },
+ { 'M', 10003, 10002, 47.50 },
+ { 'M', 10008, 10001, 1034.54}};
+
+static unsigned int trx_nr=0;
+pthread_mutex_t mutex;
+
+char *sItem = "AES256";
+int nDecLen, nEncLen, nRtn;
+
+void sql_error(char *routine)
+{
+    char message_buffer[512];
+    size_t buffer_size;
+    size_t message_length;
+
+    /* Turn off the call to sql_error() to avoid a possible infinite loop */
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    printf("\nOracle error while executing %s!\n", routine);
+
+    /* Use sqlglm() to get the full text of the error message. */
+    buffer_size = sizeof(message_buffer);
+    sqlglm(message_buffer, &buffer_size, &message_length);
+    printf("%.*s\n", message_length, message_buffer);
+
+    EXEC SQL ROLLBACK WORK RELEASE;
+
+    exit(1);
+}
+
+/*********************************************************************
+ * Main
+ ********************************************************************/
+main()
+{
+	sql_context ctx[THREADS];
+	pthread_t thread_id[THREADS];
+	pthread_attr_t status;
+	parameters params[THREADS];
+	int i;
+
+	nRtn = CO_init_api ("API");
+
+	EXEC SQL ENABLE THREADS;
+	EXEC SQL WHENEVER SQLERROR DO err_report(sqlca);
+	
+	/* Create THREADS sessions by connecting THREADS times */
+	for(i=0;i<THREADS;i++)
+	{
+		printf("Start Session %d....",i);
+		EXEC SQL CONTEXT ALLOCATE :ctx[i];
+		logon(ctx[i],CONNINFO);
+	}
+
+	/*Create mutex for transaction retrieval */
+	//if (pthread_mutex_init(&mutex,pthread_mutexattr_default))
+	if (pthread_mutex_init(&mutex,NULL))
+	{
+		printf("Can't initialize mutex\n");
+		exit(1);
+	}
+
+	/*Spawn threads*/
+	for(i=0;i<THREADS;i++)
+	{
+		params[i].ctx=ctx[i];
+		params[i].thread_id=i;
+		printf("Thread %d... ",i);
+	
+		if(pthread_create (&thread_id[i], NULL, (void *)&do_transaction, (void *)&params[i]))
+			printf("Cant create thread %d\n",i);	
+		else 
+			printf("Created\n");
+
+/*
+		//if (pthread_create(&thread_id[i],pthread_attr_default,(pthread_startroutine_t)do_transaction,(pthread_attr_t)&params[i]))
+		if (pthread_create(&thread_id[i],NULL,(void *)do_transaction,(pthread_attr_t)&params[i]))
+			printf("Cant create thread %d\n",i);
+		else
+			printf("Created\n");
+*/
+	}
+
+	/* Logoff sessions....*/
+	for(i=0;i<THREADS;i++)
+	{
+		/*wait for thread to end */
+		printf("Thread %d ....",i);
+		if (pthread_join(thread_id[i],&status))
+			printf("Error when waiting for thread % to terminate\n", i);
+		else
+			printf("stopped\n");
+		
+		printf("Detach thread...");
+		
+		if (pthread_detach(&thread_id[i]))
+			printf("Error detaching thread! \n");
+		else
+			printf("Detached!\n");
+		
+		printf("Stop Session %d....",i);
+		
+		logoff(ctx[i]);
+		
+		EXEC SQL CONTEXT FREE :ctx[i];
+	}
+	/*Destroys mutex*/
+	if (pthread_mutex_destroy(&mutex))
+	{
+		printf("Can't destroy mutex\n");
+		exit(1);
+	}
+}
+/*********************************************************************
+ * Function: do_transaction
+ *
+ * Description: This functions executes one transaction out of the
+ * records array. The records array is 'managed' by
+ * the get_transaction function.
+ *
+ *
+ ********************************************************************/
+void do_transaction(params)
+parameters *params;
+{
+	struct sqlca sqlca;
+	record_log *trx;
+	sql_context ctx=params->ctx;
+
+	//EXEC SQL WHENEVER SQLERROR DO err_report(sqlca);
+	EXEC SQL CONTEXT USE :ctx;
+	printf("Thread %d executing transaction\n",params->thread_id);
+
+    time_t startTime, endTime;
+    float elapTime;
+
+    int nRownum = 0;
+
+    printf("************************************************\n");
+    printf("****** CubeOneAPI Encrypt Insert Test   ********\n");
+    printf("************************************************\n\n");
+
+    startTime = clock();
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error("<<< call : sql_error => encryptInsert");
+    EXEC SQL CONTEXT USE :ctx;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+        long col1[ARRAY_LENGTH];
+        VARCHAR col2[ARRAY_LENGTH][13+1];
+        VARCHAR col2_enc[ARRAY_LENGTH][24+1];
+        VARCHAR col3[ARRAY_LENGTH][50+1];
+        VARCHAR col4[ARRAY_LENGTH][20+1];
+        VARCHAR col5[ARRAY_LENGTH][100+1];
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL DECLARE C_ARRAY CURSOR FOR
+        SELECT AUTONUM, JUMIN, EMAIL, PASSWORD, ADDRESS
+        //FROM BMT_MEMBER;
+        FROM BMT_MEMBER  where rownum <= 200000;
+
+    EXEC SQL OPEN C_ARRAY;
+    EXEC SQL WHENEVER NOT FOUND DO break;
+
+    while(1)
+    {
+        EXEC SQL FETCH C_ARRAY INTO
+            :col1,
+            :col2,
+            :col3,
+            :col4,
+            :col5;
+            
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+
+        printf ("sqlca.sqlerrd[2] = [%d]\n" , sqlca.sqlerrd[2]);
+
+        int i;
+        for(i=0;i<ARRAY_LENGTH;i++) {
+            //CO_enc_char(col2[i].arr, sItem,10,NULL,NULL,col2_enc[i].arr,col2_enc[i].len);
+            CO_enc_char(col2[i].arr, sItem,10,NULL,NULL,col2_enc[i].arr,&nEncLen);
+            col2_enc[i].len = nEncLen;
+            if (nRtn == CTR_SUCCESS) {
+                //printf ("<<< CubeLog :: strlen(encrypt) = %s, %d,%d \n" , regno_enc[i].arr, strlen(regno_enc[i].arr), nEncLen );
+            }
+            else {
+                printf("<<< CubeLog :: insertEncTable() : Failed Encryption data with return [%d].\n",nRtn);
+            }
+        }
+
+        EXEC SQL INSERT INTO BMT_MEMBER_CUB VALUES(:col1, :col2_enc, :col3, :col4, :col5);
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+        EXEC SQL COMMIT WORK;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+    }
+
+    printf ("--------------------------------------------------------------------------------------------\n\n\n");
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C_ARRAY;
+
+    endTime = clock();
+    elapTime = (float)(endTime - startTime)/CLOCKS_PER_SEC;
+
+    printf(" ----------------------------------------\n");
+    printf(" -------- RESULT(encryptInsert) ---------\n");
+    printf(" ----------------------------------------\n");
+    printf("  - item : %s\n" , sItem);
+//  printf("  - Total Count : %d\n" , );
+//  printf("  - Success Count : %d\n" , df.format(loop));
+    printf("  - Fail Cout : 0\n");
+    printf("  - Elapse Time : %.2f sec\n" , elapTime);
+    printf("<<< CubeLog :: (endTime - startTime)/CLOCKS_PER_SEC : [%.2f] \n\n", elapTime);
+
+    printf("sqlca.sqlerrd[2] = [%d]\n" , sqlca.sqlerrd[2]);    
+
+}
+/*****************************************************************
+ * Function: err_report
+ *
+ * Description: This routine prints out the most recent error
+ *
+ ****************************************************************/
+void err_report(sqlca)
+struct sqlca sqlca;
+{
+	if (sqlca.sqlcode < 0)
+		printf("\n%.*s\n\n",sqlca.sqlerrm.sqlerrml,sqlca.sqlerrm.sqlerrmc);
+
+	exit(1);
+}
+/*****************************************************************
+ * Function: logon
+ *
+ * Description: Logs on to the database as USERNAME/PASSWORD
+ *
+ *****************************************************************/
+void logon(ctx,connect_info)
+sql_context ctx;
+char * connect_info;
+{
+	EXEC SQL WHENEVER SQLERROR DO err_report(sqlca);
+	EXEC SQL CONTEXT USE :ctx;
+	EXEC SQL CONNECT :connect_info;
+	printf("Connected!\n");
+}
+
+/******************************************************************
+ * Function: logoff
+ *
+ * Description: This routine logs off the database
+ *
+ ******************************************************************/
+void logoff(ctx)
+sql_context ctx;
+{
+	EXEC SQL WHENEVER SQLERROR DO err_report(sqlca);
+	EXEC SQL CONTEXT USE :ctx;
+	EXEC SQL COMMIT WORK RELEASE;
+	printf("Logged off!\n");
+}
+
+/******************************************************************
+ * Function: get_transaction
+ *
+ * Description: This routine returns the next transaction to process
+ *
+ ******************************************************************/
+void get_transaction(trx)
+record_log ** trx;
+{
+	if (pthread_mutex_lock(&mutex))
+		printf("Can't lock mutex\n");
+
+	*trx=&records[trx_nr];
+
+	trx_nr++;
+
+	if (pthread_mutex_unlock(&mutex))
+		printf("Can't unlock mutex\n");
+}

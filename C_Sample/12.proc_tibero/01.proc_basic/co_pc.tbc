@@ -1,0 +1,188 @@
+/* #include <stdio.h> */
+/* #include <stdlib.h> */
+/* #include <time.h> */
+/* #include <sys/timeb.h> */
+/* #include <string.h> */
+
+#include "coapi_user.h" 
+/*EXEC SQL INCLUDE coapi_user;*/
+
+EXEC SQL INCLUDE SQLCA;
+
+char plain[100] = "1234567890123";
+char item[10] = "SSN";
+
+char encOut[2000], decOut[2000];
+int nDecLen, nEncLen, nRtn;
+
+void selDateDual();
+void encDecAPI();
+void selDualPlg();
+
+int main(int argc, char *argv[])
+{
+
+    printf("################################################\n");
+    printf("###### CubeOne API SelfTest : PRO*C TEST #######\n");
+    printf("################################################\n\n");
+
+    /* Connect to DB */
+    EXEC SQL BEGIN DECLARE SECTION;
+        /*char userid[40]= "scott/one123@ORCL";*/
+        char userid[40]= "test/test";
+    EXEC SQL END DECLARE SECTION;
+
+    printf("<<< main :: id/pass = [%s]\n", userid);
+
+    /* printf(" - Press Enter to Next-A !!!\n"); getchar();	*/
+    EXEC SQL CONNECT :userid;
+    /* printf(" - Press Enter to Next-B !!!\n"); getchar();	*/
+
+    if (sqlca.sqlcode < 0)
+    {
+        printf("<<< main :: %s\n", sqlca.sqlerrm.sqlerrmc);
+        EXEC SQL ROLLBACK WORK RELEASE;
+        exit(0);
+    }
+
+    if (nRtn != CTR_SUCCESS) {
+        printf("<<< CubeLog :: CO_init failed. returned %d\n", nRtn);
+        exit(1);
+    }
+
+    printf("<<< main :: plain = [%s]\n", plain);
+    printf("<<< main :: item = [%s]\n", item);
+    printf("\n");
+
+    selDateDual();
+    /*selDualPlg(); */
+    encDecAPI();
+
+    EXEC SQL COMMIT WORK RELEASE;
+
+    return 0;
+}
+
+void encDecAPI() {
+
+    printf ("<<< encDecAPI() :: start !!!!!\n" );
+
+    /* nRtn = CO_init_api("ORCL"); */
+    /******************************************************/
+    nRtn = CO_enc_char(plain,item,10,"TBL","COL",encOut,&nEncLen);
+    
+    if (nRtn == CTR_SUCCESS) {
+        printf (" - encrypt = [%s]\n",encOut);
+        printf (" - strlen(encrypt) = %ld,%d \n",strlen((char *)encOut),nEncLen );
+    }
+    else {
+        printf("<<< CubeLog :: Failed Encryption data with return [%d].\n",nRtn);
+        return ; 
+    }
+    printf ("\n",decOut);
+
+    /******************************************************/
+    nRtn = CO_dec_char(encOut,nEncLen,item,10,"TBL","COL",decOut);
+
+    if (nRtn == CTR_SUCCESS) {
+        printf (" - decrypt = [%s]\n",decOut);
+        printf (" - strlen(decrypt) = %ld \n",strlen(decOut) );
+    }
+    else {
+        printf("<<< CubeLog :: Failed Decryption data with return [%d].\n",nRtn);
+        return ; 
+    }
+
+    printf ("<<< encDecAPI() :: end !!!!!\n\n" );
+}
+
+void selDateDual() {
+
+    printf ("<<< selDateDual() :: start !!!!!\n" );
+
+    EXEC SQL BEGIN DECLARE SECTION;
+            VARCHAR sysdate[100+1];
+    EXEC SQL END DECLARE SECTION;
+
+    /*****************************************************************/
+    char stmt[20000];
+    memset(stmt, 0x00, sizeof(stmt));
+
+    sprintf(stmt, "SELECT sysdate FROM DUAL");
+    EXEC SQL PREPARE SEL_PRE FROM :stmt;
+
+    EXEC SQL DECLARE C2 CURSOR FOR SEL_PRE;
+    EXEC SQL OPEN C2 ;
+
+    printf(" - sql = [%s]\n", stmt);
+
+    EXEC SQL WHENEVER NOT FOUND DO break;
+    while(1)
+    {
+        memset(&sysdate, 0x00, sizeof(sysdate));
+
+        EXEC SQL FETCH C2 INTO
+            :sysdate ;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog :: selDateDual() : sqlca.sqlcode = [%d]\n", sqlca.sqlcode);
+            printf("<<< CubeLog :: selDateDual() : %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C2;
+            exit(-1);
+        }
+        printf (" - sysdate = [%s]\n" , sysdate.arr);
+    }
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C2;
+
+    printf ("<<< selDateDual() :: end !!!!!\n\n" );
+}
+
+
+void selDualPlg() {
+
+    printf ("<<< selDualPlg() :: start !!!!!\n" );
+
+    EXEC SQL BEGIN DECLARE SECTION;
+            VARCHAR enc[100+1];
+    EXEC SQL END DECLARE SECTION;
+
+    nRtn = CO_init_api("API");
+    /*****************************************************************/
+    char stmt[20000];
+    memset(stmt, 0x00, sizeof(stmt));
+
+    sprintf(stmt, "SELECT xx1.enc_varchar2_ins(:plain,10,:item) FROM DUAL");
+    EXEC SQL PREPARE SEL_PRE FROM :stmt;
+
+    EXEC SQL DECLARE C1 CURSOR FOR SEL_PRE;
+    EXEC SQL OPEN C1 USING :plain, :item  ;
+
+    printf(" - sql = [%s]\n", stmt);
+
+    EXEC SQL WHENEVER NOT FOUND DO break;
+    while(1)
+    {
+        memset(&enc, 0x00, sizeof(enc));
+
+        EXEC SQL FETCH C1 INTO
+            :enc ;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog :: selectEncTable() : sqlca.sqlcode = [%d]\n", sqlca.sqlcode);
+            printf("<<< CubeLog :: selectEncTable() : %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C2;
+            exit(-1);
+        }
+
+        printf (" - enc = [%s]\n" , enc.arr);
+
+    }
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C1;
+
+    printf ("<<< selDualPlg() :: end !!!!!\n\n" );
+}
+

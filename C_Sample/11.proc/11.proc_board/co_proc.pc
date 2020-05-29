@@ -1,0 +1,345 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/timeb.h>
+#include <string.h>
+
+#include "coapi_user.h" 
+/*EXEC SQL INCLUDE coapi_user;*/
+
+EXEC SQL INCLUDE SQLCA;
+
+char sDecOut[2000];
+char sEncOut[2000];
+char *sItem = "JUMIN1";
+
+int nDecLen, nEncLen, nRtn;
+
+void selectPlain();
+void selectEncTable();
+
+void insertPlain();
+void insertEncTable();
+
+void sql_error(char *routine)
+{
+    char message_buffer[512];
+    size_t buffer_size;
+    size_t message_length;
+
+    /* Turn off the call to sql_error() to avoid a possible infinite loop */
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    printf("\nOracle error while executing %s!\n", routine);
+
+    /* Use sqlglm() to get the full text of the error message. */
+    buffer_size = sizeof(message_buffer);
+    sqlglm(message_buffer, &buffer_size, &message_length);
+    printf("%.*s\n", message_length, message_buffer);
+
+    EXEC SQL ROLLBACK WORK RELEASE;
+
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+
+    printf("################################################\n");
+    printf("###### CubeOne API SelfTest : PRO*C TEST #######\n");
+    printf("################################################\n\n");
+
+    /* Connect to DB */
+    EXEC SQL BEGIN DECLARE SECTION;
+        char userid[40]= "scott/TIGER@ORA12";
+    EXEC SQL END DECLARE SECTION;
+
+    printf("<<< CubeLog :: id/pass = [%s]\n\n", userid);
+
+    EXEC SQL CONNECT :userid;
+
+    if (sqlca.sqlcode < 0)
+    {
+        printf("<<< CubeLog :: %s\n", sqlca.sqlerrm.sqlerrmc);
+        EXEC SQL ROLLBACK WORK RELEASE;
+        exit(0);
+    }
+
+    /*memset(sEncOut, 0x00, sizeof(sEncOut));
+    memset(sDecOut, 0x00, sizeof(sDecOut)); */
+    /*********************************/
+    /* Initializing Key  *************/
+    /*********************************/
+    /**************************************************************
+    ** !!!!!! Very Important !!!!!
+    ** 0) do not use coinit  ..if coinit is called many times then performance is bad ..
+    ** 1) Call this Function only once for performance ..
+    ** 2) CO_init_api ("API"); for Access Controll ..
+    **      - user : OS telnet account
+    **      - ip/mac : Terminal PC          
+    ** 3) CO_init (0, "API", "SA", "","","","","","","",100); is for Old-Version ..    
+    ***************************************************************/
+    /*  nRtn = CO_init (bFirst, sSid, sUser, sNull, sNull, sNull, sNull, sNull, sNull, sNull, nSessionId);
+                                        ip Machine OsUser Program Module Terminal Psswd SeesionId */
+    /* nRtn = CO_init (0, "ORA11", "SCOTT", "","",     "",    "",     "",    "",      "",   0); */
+    /*nRtn = CO_init_api ("ORCL"); */
+
+    if (nRtn != CTR_SUCCESS) {
+        printf("<<< CubeLog :: CO_init failed. returned %d\n", nRtn);
+        exit(1);
+    }
+
+/*
+    insertPlain();
+    insertEncTable();
+    selectEncTable();
+    selectPlain();
+*/
+    selectEncTable();
+
+    EXEC SQL COMMIT WORK RELEASE;
+    return 0;
+}
+
+void insertPlain() {
+
+    printf ("<<< [1] Insert Plain Table\n" );
+
+    char buf[100];
+
+    EXEC SQL BEGIN DECLARE SECTION;
+        VARCHAR writer[100+1];
+        VARCHAR regno[13+1];
+        VARCHAR subject[100+1];
+        VARCHAR contents[4000+1];
+        long seq;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT NVL(MAX(seq),0)+1 
+             INTO seq
+             FROM zcube_board8;
+
+    memset(buf,0x00,100);
+    sprintf(buf, "%ld", seq);
+
+    strcpy(writer.arr,"wri000"); strcat(writer.arr, buf);
+    writer.len = strlen(writer.arr);
+
+    strcpy(regno.arr,"reg000"); strcat(regno.arr, buf);
+    regno.len = strlen(regno.arr);
+
+    strcpy(subject.arr,"sub000"); strcat(subject.arr, buf);
+    subject.len = strlen(subject.arr);
+
+    strcpy(contents.arr,"cnt000"); strcat(contents.arr, buf);
+    contents.len = strlen(contents.arr);
+
+    printf(" - [%s],[%s],[%s],[%s]\n\n",writer.arr, regno.arr, subject.arr, contents.arr);
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error("void insertPlain() :: ERROR !!");
+
+    EXEC SQL INSERT INTO zcube_board8
+        (seq, writer, regno, subject, cnt, contents, wrdate) 
+    VALUES(:seq, :writer, :regno, :subject, 0, :contents, SYSDATE);
+    EXEC SQL COMMIT WORK;
+
+    if (sqlca.sqlcode != 0) {
+        printf("<<< CubeLog :: insertPlain : sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+        printf("<<< CubeLog :: insertPlain : %s\n", sqlca.sqlerrm.sqlerrmc);
+        exit(-1);
+    }   
+}
+
+void insertEncTable() {
+
+    printf ("<<< [2] Insert Enc Table\n" );
+
+    char buf[100];
+
+    EXEC SQL BEGIN DECLARE SECTION;
+        VARCHAR writer[100+1];
+        VARCHAR regno[24+1];
+        VARCHAR subject[100+1];
+        VARCHAR contents[4000+1];
+        long seq;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT NVL(MAX(seq),0)+1 
+             INTO seq
+             FROM zcube_board#;
+
+    memset(buf,0x00,100);
+    sprintf(buf, "%ld", seq);
+
+    strcpy(writer.arr,"wri000"); strcat(writer.arr, buf);
+    writer.len = strlen(writer.arr);
+
+    strcpy(regno.arr,"reg000"); strcat(regno.arr, buf);
+    nRtn = CO_enc_char(regno.arr, sItem,10,"TBL","COL",sEncOut,&nEncLen);
+        if (nRtn == CTR_SUCCESS) {
+                /*printf ("<<< CubeLog :: encrypt = [%s]\n" , sEncOut);
+                printf ("<<< CubeLog :: strlen(encrypt) = %d,%d \n" , strlen(sEncOut), nEncLen ); */
+        }
+        else {
+                printf("<<< CubeLog :: insertEncTable() : Failed Encryption data with return [%d].\n",nRtn);
+                return ;
+        }
+
+    strcpy(regno.arr,sEncOut);
+    regno.len = strlen(regno.arr);
+
+    strcpy(subject.arr,"sub000"); strcat(subject.arr, buf);
+    subject.len = strlen(subject.arr);
+
+    strcpy(contents.arr,"cnt000"); strcat(contents.arr, buf);
+    contents.len = strlen(contents.arr);
+
+    printf(" - [%s],[%s],[%s],[%s]\n\n",writer.arr, regno.arr, subject.arr, contents.arr);
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error("void insertPlain() :: ERROR !!");
+
+    EXEC SQL INSERT INTO zcube_board#
+        (seq, writer, regno, subject, cnt, contents, wrdate) 
+    VALUES(:seq, :writer, :regno, :subject, 0, :contents, SYSDATE);
+    EXEC SQL COMMIT WORK;
+
+    if (sqlca.sqlcode != 0) {
+        printf("<<< CubeLog :: insertPlain() : sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+        printf("<<< CubeLog :: insertPlain() : %s\n", sqlca.sqlerrm.sqlerrmc);
+        exit(-1);
+    }   
+}
+void selectPlain() {
+
+    int nRownum = 0;
+
+    printf ("<<< [3] Select Plain\n" );
+    
+    EXEC SQL WHENEVER SQLERROR DO sql_error("<<< call : sql_error => selectPlain");
+
+    EXEC SQL BEGIN DECLARE SECTION;
+        VARCHAR writer[100+1];
+        VARCHAR regno[13+1];
+        VARCHAR subject[100+1];
+        VARCHAR wrdate[50];
+        long cnt;
+        long seq;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL DECLARE C1 CURSOR FOR
+        SELECT seq, writer, regno, subject, cnt, wrdate 
+        FROM zcube_board8
+        ORDER BY seq DESC ;
+
+    EXEC SQL OPEN C1;
+
+    printf ("---------------------------------------------------------------------------------------------\n");
+    printf ("|%3s|%-10s|%-30s|%-10s|%3s|%-30s|\n" , "Seq", "Writer", "Regno", "Subject", "Cnt", "Wrdate");
+    printf ("---------------------------------------------------------------------------------------------\n");
+
+    EXEC SQL WHENEVER NOT FOUND DO break;
+    while(1)
+    {
+        memset(&writer, 0x00, sizeof(writer));
+        memset(&regno, 0x00, sizeof(regno));
+        memset(&subject, 0x00, sizeof(subject));
+        memset(&wrdate, 0x00, sizeof(wrdate));
+
+        EXEC SQL FETCH C1 INTO
+            :seq,
+            :writer,
+            :regno,
+            :subject,
+            :cnt,
+            :wrdate;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C1;
+            exit(-1);
+        }
+
+        if(++nRownum > 10) break;    
+
+        printf ("|%3d|%-10s|%-30s|%-10s|%3d|%-30s|\n" , seq, writer.arr, regno.arr, subject.arr, cnt, wrdate.arr);
+    }
+
+    printf ("--------------------------------------------------------------------------------------------\n\n\n");
+    
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C1;
+
+}
+
+void selectEncTable() {
+
+    printf ("<<< [4] Select Enc Table\n" );
+
+    int nRownum = 0;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+            VARCHAR writer[100+1];
+            VARCHAR regno[24+1];
+            VARCHAR subject[100+1];
+            VARCHAR wrdate[50];
+            long cnt;
+            long seq;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL DECLARE C2 CURSOR FOR
+        SELECT seq, writer, regno, subject, cnt, wrdate 
+        FROM zcube_board#
+        ORDER BY seq DESC;
+    EXEC SQL OPEN C2;
+
+    printf ("------------------------------------------------------------------------------------------------------------------\n");
+    printf ("|%3s|%-10s|%-30s|%-20s|%-10s|%3s|%-30s|\n" , "Seq", "Writer", "Regno(Enc)", "Regno(Dec)", "Subject", "Cnt", "Wrdate");
+    printf ("------------------------------------------------------------------------------------------------------------------\n");
+
+    EXEC SQL WHENEVER NOT FOUND DO break;
+    while(1)
+    {
+        memset(&writer, 0x00, sizeof(writer));
+        memset(&regno, 0x00, sizeof(regno));
+        memset(&subject, 0x00, sizeof(subject));
+        memset(&wrdate, 0x00, sizeof(wrdate));
+
+        EXEC SQL FETCH C2 INTO
+            :seq,
+            :writer,
+            :regno,
+            :subject,
+            :cnt,
+            :wrdate ;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog :: selectEncTable() : sqlca.sqlcode = [%d]\n", sqlca.sqlcode);
+            printf("<<< CubeLog :: selectEncTable() : %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C2;
+            exit(-1);
+        }
+
+        nRtn = CO_dec_char(regno.arr,regno.len,sItem,10,"TBL","COL", sDecOut);
+
+        if (nRtn == CTR_SUCCESS) {
+            /*
+            printf ("<<< CubeLog :: decrypt = [%s]\n" , sDecOut);
+            printf ("<<< CubeLog :: strlen(decrypt) = %d \n" , strlen(sDecOut) );
+            */
+        }
+        else {
+            printf("<<< CubeLog :: selectEncTable() : Failed Decryption regno with return [%d].\n",nRtn);
+        }
+
+        printf ("|%3d|%-10s|%-30s|%-20s|%-10s|%3d|%-30s|\n" , seq, writer.arr, regno.arr, sDecOut, subject.arr, cnt, wrdate.arr);
+
+        if(++nRownum > 10) break;
+
+    }
+
+    printf ("------------------------------------------------------------------------------------------------------------------\n");
+    
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C2;
+}
+

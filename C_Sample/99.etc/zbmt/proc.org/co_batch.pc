@@ -1,0 +1,240 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/timeb.h>
+#include <string.h>
+#include <pthread.h>
+
+
+#include "coapi_user.h" 
+/*EXEC SQL INCLUDE coapi_user;*/
+
+#define ARRAY_LENGTH 20000
+#define THREADS 3
+
+
+
+EXEC SQL INCLUDE SQLCA;
+
+char sDecOut[2000];
+unsigned char sEncOut[2000];
+
+int nDecLen, nEncLen, nRtn;
+
+char sIdxChar[2000];
+char sIdxCharSel[2000];
+
+char *sPlain = "1234567890123";
+char *sItem = "AES256";
+
+int nDecLen, nEncLen, nRtn;
+int nIdxCharLen, nIdxCharSelLen;
+
+int nTotal=10000000;
+
+int get_envdata();
+int basic();
+int basic_salt();
+int order();
+int speed();
+
+void thread();
+void encryptInsert();
+
+void sql_error(char *routine)
+{
+    char message_buffer[512];
+    size_t buffer_size;
+    size_t message_length;
+
+    /* Turn off the call to sql_error() to avoid a possible infinite loop */
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    printf("\nOracle error while executing %s!\n", routine);
+
+    /* Use sqlglm() to get the full text of the error message. */
+    buffer_size = sizeof(message_buffer);
+    sqlglm(message_buffer, &buffer_size, &message_length);
+    printf("%.*s\n", message_length, message_buffer);
+
+    EXEC SQL ROLLBACK WORK RELEASE;
+
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+    printf("##########################################################################\n");
+    printf("########## BMT(TTA) CubeOne-API JDBC Testing-MultiThread(2015.06.17) #####\n");
+    printf("##########################################################################\n\n\n");
+
+	sql_context ctx[THREADS];
+	EXEC SQL ENABLE THREADS;	
+
+    /* Connect to DB */
+    EXEC SQL BEGIN DECLARE SECTION;
+        char userid[40]= "scott/one123@ORCL";
+    EXEC SQL END DECLARE SECTION;
+
+    printf("<<< CubeLog :: id/pass = [%s]\n\n", userid);
+
+    EXEC SQL CONNECT :userid;
+
+	printf("<<< CubeLog :: step1 \n");
+
+    if (sqlca.sqlcode < 0)
+    {
+        printf("<<< CubeLog :: %s\n", sqlca.sqlerrm.sqlerrmc);
+        EXEC SQL ROLLBACK WORK RELEASE;
+        exit(0);
+    }
+
+	printf("<<< CubeLog :: step2 \n");
+    /*memset(sEncOut, 0x00, sizeof(sEncOut));
+    memset(sDecOut, 0x00, sizeof(sDecOut)); */
+    /*********************************/
+    /* Initializing Key  *************/
+    /*********************************/
+    /**************************************************************
+    ** !!!!!! Very Important !!!!!
+    ** 0) do not use coinit  ..if coinit is called many times then performance is bad ..
+    ** 1) Call this Function only once for performance ..
+    ** 2) CO_init_api ("API"); for Access Controll ..
+    **      - user : OS telnet account
+    **      - ip/mac : Terminal PC          
+    ** 3) CO_init (0, "API", "SA", "","","","","","","",100); is for Old-Version ..    
+    ***************************************************************/
+    /*  nRtn = CO_init (bFirst, sSid, sUser, sNull, sNull, sNull, sNull, sNull, sNull, sNull, nSessionId);
+                                        ip Machine OsUser Program Module Terminal Psswd SeesionId */
+    //nRtn = CO_init (0, "ORCL", "SCOTT", "","",     "",    "",     "",    "",      "",   0);
+    nRtn = CO_init_api ("API"); 
+
+    if (nRtn != CTR_SUCCESS) {
+        printf("<<< CubeLog :: CO_init failed. returned %d\n", nRtn);
+        exit(1);
+    }
+	
+	printf("<<< CubeLog :: step3 \n");
+    //encryptInsert();
+	//thread();
+
+	
+    EXEC SQL COMMIT WORK RELEASE;
+
+    return 0;
+}
+
+
+void encryptInsert() {
+
+	printf("<<< CubeLog :: step4 \n");
+
+	sql_context ctx;
+
+    time_t startTime, endTime;
+    float elapTime;
+
+    int nRownum = 0;
+
+	printf("************************************************\n");
+	printf("****** CubeOneAPI Encrypt Insert Test   ********\n");
+	printf("************************************************\n\n");
+
+	startTime = clock();
+
+    EXEC SQL WHENEVER SQLERROR DO sql_error("<<< call : sql_error => encryptInsert");
+	EXEC SQL CONTEXT USE :ctx;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+        long col1[ARRAY_LENGTH];
+        VARCHAR col2[ARRAY_LENGTH][13+1];
+        VARCHAR col2_enc[ARRAY_LENGTH][24+1];
+        VARCHAR col3[ARRAY_LENGTH][50+1];
+        VARCHAR col4[ARRAY_LENGTH][20+1];
+        VARCHAR col5[ARRAY_LENGTH][100+1];
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL DECLARE C_ARRAY CURSOR FOR
+        SELECT AUTONUM, JUMIN, EMAIL, PASSWORD, ADDRESS 
+        FROM BMT_MEMBER;
+        //FROM BMT_MEMBER  where rownum < 1000000000;
+
+    EXEC SQL OPEN C_ARRAY;
+    EXEC SQL WHENEVER NOT FOUND DO break;
+
+    while(1)
+    {
+/*
+        memset(&writer, 0x00, sizeof(writer));
+        memset(&regno, 0x00, sizeof(regno));
+        memset(&subject, 0x00, sizeof(subject));
+*/
+        EXEC SQL FETCH C_ARRAY INTO
+            :col1,
+            :col2,
+            :col3,
+            :col4,
+            :col5;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+
+        if(++nRownum%1000 == 10) break;    
+
+        printf ("sqlca.sqlerrd[2] = [%d]\n" , sqlca.sqlerrd[2]);
+
+		int i;
+		for(i=0;i<ARRAY_LENGTH;i++) {
+			//CO_enc_char(col2[i].arr, sItem,10,NULL,NULL,col2_enc[i].arr,col2_enc[i].len);
+			CO_enc_char(col2[i].arr, sItem,10,NULL,NULL,col2_enc[i].arr,&nEncLen);
+			col2_enc[i].len = nEncLen;
+        	if (nRtn == CTR_SUCCESS) {
+            	//printf ("<<< CubeLog :: strlen(encrypt) = %s, %d,%d \n" , regno_enc[i].arr, strlen(regno_enc[i].arr), nEncLen ); 
+        	}
+        	else {
+            	printf("<<< CubeLog :: insertEncTable() : Failed Encryption data with return [%d].\n",nRtn);
+        	}
+		}
+
+        EXEC SQL INSERT INTO BMT_MEMBER_CUB VALUES(:col1, :col2_enc, :col3, :col4, :col5);
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+        EXEC SQL COMMIT WORK;
+
+        if (sqlca.sqlcode != 0) {
+            printf("<<< CubeLog(!0) :: sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+            printf("<<< CubeLog(!0) :: %s\n", sqlca.sqlerrm.sqlerrmc);
+            EXEC SQL CLOSE C_ARRAY;
+            exit(-1);
+        }
+    }
+
+
+    printf ("--------------------------------------------------------------------------------------------\n\n\n");
+    
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL CLOSE C_ARRAY;
+
+
+	endTime = clock();
+	elapTime = (float)(endTime - startTime)/CLOCKS_PER_SEC;
+
+	printf(" ----------------------------------------\n");
+	printf(" -------- RESULT(encryptInsert) ---------\n");
+	printf(" ----------------------------------------\n");
+	printf("  - item : %s\n" , sItem);
+//	printf("  - Total Count : %d\n" , );
+//	printf("  - Success Count : %d\n" , df.format(loop));
+	printf("  - Fail Cout : 0\n");
+	printf("  - Elapse Time : %.2f sec\n" , elapTime);
+	printf("<<< CubeLog :: (endTime - startTime)/CLOCKS_PER_SEC : [%.2f] \n\n", elapTime);
+
+	printf("sqlca.sqlerrd[2] = [%d]\n" , sqlca.sqlerrd[2]);
+}

@@ -1,0 +1,436 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#include "coapi_user.h" 
+/*EXEC SQL INCLUDE coapi_user;*/
+
+EXEC SQL INCLUDE SQLCA;
+
+char sDecOut[2000];
+char sEncOut[2000];
+char *sPlain = "한글";
+//char *sPlain = "한글1234qwet";
+char *sItem = "AES256";
+
+int nDecLen, nEncLen, nRtn;
+
+void selectPlain();
+void selectEncTable();
+
+void insertPlain();
+void insertEncTable();
+
+void sql_error(char *routine)
+{
+	char message_buffer[512];
+	size_t buffer_size;
+	size_t message_length;
+
+	// Turn off the call to sql_error() to avoid a possible infinite loop 
+	EXEC SQL WHENEVER SQLERROR CONTINUE;
+	printf("\nOracle error while executing %s!\n", routine);
+
+	// Use sqlglm() to get the full text of the error message. 
+	buffer_size = sizeof(message_buffer);
+	sqlglm(message_buffer, &buffer_size, &message_length);
+	printf("%.*s\n", message_length, message_buffer);
+
+	EXEC SQL ROLLBACK WORK RELEASE;
+
+	exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+
+	printf("################################################\n");
+	printf("###### CubeOne API SelfTest : PRO*C TEST #######\n");
+	printf("################################################\n\n");
+
+	/* Connect to DB */
+	EXEC SQL BEGIN DECLARE SECTION;
+//		char userid[40]= "scott/one123@orcl";    // 11g ..
+		char userid[40]= "scott/one123@orcl10";  // 10g 
+	EXEC SQL END DECLARE SECTION;
+
+	printf("<<< CubeLog :: id/pass = [%s]\n\n", userid);
+
+	EXEC SQL CONNECT :userid;
+
+	if (sqlca.sqlcode < 0)
+	{
+		printf("<<< CubeLog :: %s\n", sqlca.sqlerrm.sqlerrmc);
+		EXEC SQL ROLLBACK WORK RELEASE;
+		exit(0);
+	}
+
+	//memset(sEncOut, 0x00, sizeof(sEncOut));
+	//memset(sDecOut, 0x00, sizeof(sDecOut));
+	/*********************************/
+	/* Initializing Key  *************/
+	/*********************************/
+	/**************************************************************
+	** !!!!!! Very Important !!!!!
+	** 0) do not use coinit  ..if coinit is called many times then performance is bad ..
+	** 1) Call this Function only once for performance ..
+	** 2) CO_init_api ("API"); for Access Controll ..
+	**      - user : OS telnet account
+	**      - ip/mac : Terminal PC          
+	** 3) CO_init (0, "API", "SA", "","","","","","","",100); is for Old-Version ..    
+	***************************************************************/
+	/*  nRtn = CO_init (bFirst, sSid, sUser, sNull, sNull, sNull, sNull, sNull, sNull, sNull, nSessionId);
+										ip Machine OsUser Program Module Terminal Psswd SeesionId */
+	nRtn = CO_init (0, "ORCL", "SCOTT", "","",     "",    "",     "",    "",      "",   0);
+
+	if (nRtn != CTR_SUCCESS) {
+		printf("<<< CubeLog :: CO_init failed. returned %d\n", nRtn);
+		exit(1);
+	}
+
+	insertPlain();
+	insertEncTable();
+
+	selectPlain();
+	selectEncTable();
+
+	EXEC SQL COMMIT WORK RELEASE;
+	return 0;
+}
+
+void insertPlain() {
+
+	printf ("<<< [1] Insert Plain Table\n" );
+
+	EXEC SQL BEGIN DECLARE SECTION;
+		VARCHAR col_pk[15+1];
+		VARCHAR col_varchar2[30+1];
+		VARCHAR col_hangul[30+1];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL SELECT NVL(MAX(to_number(col_pk)),0)+1
+			 INTO :col_pk
+			 FROM zcube_hangul;
+
+	// col_varchar2
+	strcpy(col_varchar2.arr, sPlain); 
+	col_varchar2.len = strlen(sPlain);
+
+	// col_hangul
+	strcpy(col_hangul.arr,sPlain); 
+	col_hangul.len = strlen(sPlain);
+
+	printf("      - (%s),[%s],[%s]\n\n",col_pk.arr, col_varchar2.arr, col_hangul.arr);
+
+	EXEC SQL WHENEVER SQLERROR DO sql_error("void insertPlain() :: ERROR !!");
+
+	EXEC SQL INSERT INTO zcube_hangul
+		(col_pk, col_varchar2, col_hangul, col_date) 
+	VALUES(:col_pk, :col_varchar2, :col_hangul, SYSDATE);
+	EXEC SQL COMMIT WORK;
+
+	if (sqlca.sqlcode != 0) {
+		printf("<<< CubeLog :: insertPlain() : sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+		printf("<<< CubeLog :: insertPlain() : %s\n", sqlca.sqlerrm.sqlerrmc);
+		exit(-1);
+	}   
+}
+
+void insertEncTable() {
+
+	printf ("<<< [2] Insert Enc Table\n" );
+
+	EXEC SQL BEGIN DECLARE SECTION;
+		VARCHAR col_pk[15+1];
+		VARCHAR col_varchar2[30+1];
+		VARCHAR col_hangul[50+1];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL SELECT NVL(MAX(to_number(col_pk)),0)+1
+			 INTO :col_pk
+			 FROM zcube_hangul#;
+
+	// col_varchar2
+	strcpy(col_varchar2.arr, sPlain); 
+	col_varchar2.len = strlen(sPlain);
+
+	// Enc col_hangul
+	CO_enc_char(sPlain, sItem,10,"TBL","COL",sEncOut,&nEncLen);
+	strcpy(col_hangul.arr,sEncOut);
+	col_hangul.len = strlen(col_hangul.arr);
+
+	printf("      - (%s),[%s],[%s]\n\n",col_pk.arr, col_varchar2.arr, col_hangul.arr);
+
+	EXEC SQL WHENEVER SQLERROR DO sql_error("void insertPlain() :: ERROR !!");
+
+	EXEC SQL INSERT INTO zcube_hangul#
+		(col_pk, col_varchar2, col_hangul, col_date) 
+	VALUES(:col_pk, :col_varchar2, :col_hangul, sysdate);
+	EXEC SQL COMMIT WORK;
+
+	if (sqlca.sqlcode != 0) {
+		printf("<<< CubeLog :: insertEncTable() : sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+		printf("<<< CubeLog :: insertEncTable() : %s\n", sqlca.sqlerrm.sqlerrmc);
+		exit(-1);
+	}   
+}
+
+
+void selectPlain() {
+
+	int nRownum = 0;
+
+	char buf_char[100];
+
+	printf ("<<< [3] Select Plain\n" );
+	
+	EXEC SQL WHENEVER SQLERROR DO sql_error("<<< call : sql_error => selectPlain");
+
+	EXEC SQL BEGIN DECLARE SECTION;
+		VARCHAR col_pk[15+1];
+		VARCHAR col_varchar2[30+1];
+		VARCHAR col_hangul[30+1];
+		VARCHAR col_date[50];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL DECLARE C1 CURSOR FOR
+		SELECT col_pk, col_varchar2, col_hangul, col_date
+		FROM zcube_hangul
+		ORDER BY to_number(col_pk) DESC ;
+
+	EXEC SQL OPEN C1;
+
+	printf ("---------------------------------------------------------------------------------------------\n");
+	printf ("%-15s%-30s%-30s%-15s\n" ,  "col_pk", "col_varchar2", "col_hangul",  "col_date");
+	printf ("---------------------------------------------------------------------------------------------\n");
+
+	EXEC SQL WHENEVER NOT FOUND DO break;
+	while(1)
+	{
+		memset(&col_pk, 0x00, sizeof(col_pk));
+		memset(&col_varchar2, 0x00, sizeof(col_varchar2));
+		memset(&col_hangul, 0x00, sizeof(col_hangul));
+		memset(&col_date, 0x00, sizeof(col_date));
+
+		EXEC SQL FETCH C1 INTO
+			:col_pk,
+			:col_varchar2,
+			:col_hangul,
+			:col_date;
+
+		if (sqlca.sqlcode != 0) {
+			printf("<<< CubeLog :: selectPlain() : sqlca.sqlcode = [%ld]\n", sqlca.sqlcode);
+			printf("<<< CubeLog :: selectPlain() : %s\n", sqlca.sqlerrm.sqlerrmc);
+			EXEC SQL CLOSE C1;
+			exit(-1);
+		}
+
+		if(++nRownum > 10) break;	
+
+		printf ("%-15s%-30s%-30s%-15s\n" , col_pk.arr, col_varchar2.arr, col_hangul.arr, col_date.arr);
+	}
+
+	printf ("--------------------------------------------------------------------------------------------\n\n\n");
+	
+	EXEC SQL WHENEVER SQLERROR CONTINUE;
+	EXEC SQL CLOSE C1;
+
+}
+
+void selectEncTable() {
+
+	printf ("<<< [4] Select Enc Table\n" );
+
+	int nRownum = 0;
+
+    char buf_char[100];
+
+	EXEC SQL BEGIN DECLARE SECTION;
+        VARCHAR col_pk[15+1];
+        VARCHAR col_varchar2[4000+1];
+        VARCHAR col_hangul[4000+1];
+        VARCHAR col_date[24+1];
+	EXEC SQL END DECLARE SECTION;
+
+    char dec_col_hangul[100+1];
+
+	EXEC SQL DECLARE C2 CURSOR FOR
+		SELECT col_pk, col_varchar2, col_hangul,  col_date
+		FROM zcube_hangul#
+		ORDER BY to_number(col_pk) DESC;
+	EXEC SQL OPEN C2;
+
+	printf ("-----------------------------------------------------------------------------------------------------------------------------------\n");
+	printf ("%-10s%-30s%-50s%-30s%-15s\n" ,  "col_pk", "col_varchar2",  "col_hangul", "col_hangul[dec]",  "col_date");
+	printf ("-----------------------------------------------------------------------------------------------------------------------------------\n");
+
+	EXEC SQL WHENEVER NOT FOUND DO break;
+	while(1)
+	{
+        memset(&col_pk, 0x00, sizeof(col_pk));
+        memset(&col_varchar2, 0x00, sizeof(col_varchar2));
+        memset(&col_hangul, 0x00, sizeof(col_hangul));
+        memset(&col_date, 0x00, sizeof(col_date));
+
+		EXEC SQL FETCH C2 INTO
+            :col_pk,
+            :col_varchar2,
+            :col_hangul,
+            :col_date;
+
+		if (sqlca.sqlcode != 0) {
+			printf("<<< CubeLog :: SelectEncTable() : sqlca.sqlcode = [%d]\n", sqlca.sqlcode);
+			printf("<<< CubeLog :: SelectEncTable() : %s\n", sqlca.sqlerrm.sqlerrmc);
+			EXEC SQL CLOSE C2;
+			exit(-1);
+		}
+
+		nRtn = CO_dec_char(col_hangul.arr,col_hangul.len,sItem,10,"TBL","COL", dec_col_hangul);
+		if (nRtn != CTR_SUCCESS) {
+			printf("<<< CubeLog :: SelectEncTable() : Failed Decryption col_hangul with return [%d].\n",nRtn);
+		}
+
+		printf ("%-10s%-30s%-50s%-30s%-15s\n" , col_pk.arr, col_varchar2.arr, col_hangul.arr, dec_col_hangul, col_date.arr);
+
+		if(++nRownum > 10) break;
+
+	}
+
+	printf ("-----------------------------------------------------------------------------------------------------------------------------------\n");
+	
+	EXEC SQL WHENEVER SQLERROR CONTINUE;
+	EXEC SQL CLOSE C2;
+}
+
+
+
+int oranum2int (char *inval, int len, int *outint)
+{
+        int exp ;
+        int tot ;
+        int i, j ;
+        unsigned int temp ;
+        unsigned char tempchar ;
+
+        temp = 0xC1 ;
+        tempchar = inval[0] ;
+        exp = tempchar - temp ;
+#ifdef DEBUG
+        printf ("exp = [%d], val = [%x] -- [%d]\n", exp, tempchar, temp) ;
+#endif
+
+        tot = 0 ;
+        if (inval[0] == 0) {
+                *outint = 0;
+                return 0;
+        }
+        if (exp >= 0)   /* Positive value */
+        {
+                for (i = 1; i < len; i++)
+                {
+                        temp = inval[i] - 1 ;
+                        if (exp+1 - i < 0) return 1 ;   /* Real Number */
+                        tot = tot + temp * (int)pow((double)100, (double)(exp+1 - i)) ;
+#ifdef DEBUG
+                printf ("char = [%d], temp = [%d][%d][%d]\n",
+                        inval[i], temp, tot, i) ;
+#endif
+                }
+                *outint = tot ;
+        }
+
+        else    /* Negative value */
+        {
+                exp = 62 - tempchar ; /* Rearrange exp */
+#ifdef DEBUG
+        printf ("exp = [%d], val = [%d] \n", exp, tempchar) ;
+#endif
+                for (i = 1; i < len-1; i++)
+                {
+                        temp = 101 - inval[i] ;
+                        if (exp+1 - i < 0) return 1 ;   /* Real Number */
+                        tot = tot + temp * (int)pow((double)100, (double)(exp+1 - i)) ;
+#ifdef DEBUG
+                printf ("char = [%d], temp = [%d][%d][%d]\n",
+                        inval[i], temp, tot, i) ;
+#endif
+                }
+                *outint = tot * -1 ;
+        }
+
+
+        return 0 ;
+
+}
+
+
+
+int oraint2num (int inval, char *outbyte, int *outlen)
+{
+        int exp ;
+        int exit = 1 ;
+        char bytechar ;
+        int i = 0, j ;
+        int last ;
+        char tmpchar[100] ;
+
+        exit = inval ;
+        if (inval > 0)
+        {
+                while (exit)
+                {
+                        bytechar = exit % 100 ;
+                        exit = exit / 100 ;
+                        if (i == 0)
+                        {
+                                if (exit <= 1 || bytechar >= exit)
+                                        last = bytechar ;
+                                else
+                                        last = inval % exit ;
+                        }
+                        else
+                        {
+                                tmpchar[i] = bytechar + 1 ;
+#ifdef DEBUG
+                                printf ("[%d] loop exit = [%d], char = [%d] ..[%d]\n",
+                                        i,      exit,    bytechar, last) ;
+                                printf ("char = [%d, %x] \n", tmpchar[i], tmpchar[i]) ;
+#endif
+                        }
+                        i++ ;
+                }
+
+                outbyte[0] = 0xC1 + (i-1) ;
+                outbyte[i] = last + 1 ;
+                for (j = 1;j < i; j++)
+                        outbyte[j] = tmpchar[i - j] ;
+#ifdef DEBUG
+                printf ("First char = [0x%x][%x] , len = [%d] \n", outbyte[0], outbyte[i], i+1) ;
+#endif
+
+                *outlen = i + 1 ;
+        } else if( inval == 0)
+        {
+                outbyte[0] = 0x80;
+                *outlen = 1 ;
+        }
+        return 0 ;
+}
+
+
+int trim(char str[]) {
+ int i;
+
+ for (i = strlen(str)-1; i >= 0; i--) {
+  if (str[i] != ' ' && str[i] != '\t' && str[i] != '\n') {
+   break;
+  }
+ }
+
+ str[i+1] = '\0';
+
+ return i;
+}
+
+
