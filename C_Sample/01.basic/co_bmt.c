@@ -1,4 +1,9 @@
+
+
 /*
+
+git !!!
+
 20007    No Privileges to access encrypted column    COER_NOTALLOWEDS
 20008    Item is not specified                       COER_NOITEM_ENTEREDS
 20009    Fail to get OCI Environment                 COER_FAIL_GET_OCIENVS
