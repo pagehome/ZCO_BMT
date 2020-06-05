@@ -4,7 +4,7 @@ import java.util.*;
 
 import com.cubeone.*;
 
-public class co_file {
+public class co_file2 {
     static String plain = "1234567890123";
     static String encrypt = "" ;
     static String decrypt = "" ;

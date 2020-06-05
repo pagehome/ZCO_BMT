@@ -16,13 +16,17 @@
 	<classpathentry kind="src" path="11.jdbc/01.basic_board"/>
 	<classpathentry kind="src" path="11.jdbc/02.data_type"/>
 	<classpathentry kind="src" path="11.jdbc/03.clob"/>
-	<classpathentry kind="src" path="11.jdbc/04.blob"/>
+	<classpathentry excluding="01/hybrid/|01.hybrid/|02/plugIn/|02.plugIn/" kind="src" path="11.jdbc/04.blob"/>
 	<classpathentry kind="src" path="90.bmt_spec"/>
 	<classpathentry kind="src" path="50.dongbu_hangul"/>
 	<classpathentry kind="src" path="31.wrap/02.K"/>
 	<classpathentry kind="src" path="31.wrap/01.basic"/>
 	<classpathentry kind="src" path="30.QA/01.basic"/>
 	<classpathentry kind="src" path="30.QA/02.thread"/>
+	<classpathentry excluding="01.unix.asc/|02/unix/bin/|02.unix.bin/" kind="src" path="04.file"/>
+	<classpathentry kind="src" path="04.file/02.unix.bin"/>
+	<classpathentry kind="src" path="11.jdbc/04.blob/01.hybrid"/>
+	<classpathentry kind="src" path="11.jdbc/04.blob/02.plugIn"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="var" path="CUBEONE_LIB"/>
 	<classpathentry kind="lib" path="D:/ojdbc7.jar"/>

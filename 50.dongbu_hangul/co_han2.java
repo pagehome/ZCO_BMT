@@ -1,7 +1,7 @@
 import java.sql.*;
 import com.cubeone.CubeOneAPI;
 
-public class co_han
+public class co_han2
 {
 
     static String strUrl = "jdbc:oracle:thin:@192.168.1.11:1521:ORCL"; // URL 10g GA1
