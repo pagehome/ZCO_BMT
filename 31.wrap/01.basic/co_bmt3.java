@@ -30,7 +30,7 @@ import java.text.*;
 import com.cubeone.*;
 import com.site.*;
 
-public class co_bmt {
+public class co_bmt3 {
 
 	static String plain = "1234567890123";
 	static String encrypt = "" ;

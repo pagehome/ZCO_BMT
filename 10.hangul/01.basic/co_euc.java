@@ -29,7 +29,7 @@ import com.cubeone.*;
 import java.util.*;
 
 public class co_euc {
-    static String plain = "ÇÑ±ÛÅ×½ºÆ®K";
+    static String plain = "í•œê¸€";
     static String encrypt = "" ;
     static String decrypt = "" ;
     static String item = "AES_PART" ;
@@ -66,7 +66,7 @@ public class co_euc {
         System.out.println("<<< CubeLog :: plain.length() = [" + plain.length()+ "]");
         System.out.println("<<< CubeLog :: plain.getBytes().length = [" + plain.getBytes().length + "]");
         System.out.println("<<< CubeLog :: plain.getBytes('EUC-KR').length = [" + plain.getBytes("EUC-KR").length + "]");
-        System.out.println("<<< CubeLog :: plain.getBytes('UTF-8').length = [" + plain.getBytes("utf8").length + "]");
+        System.out.println("<<< CubeLog :: plain.getBytes('UTF-8').length  = [" + plain.getBytes("utf8").length + "]");
 
         System.out.println("\n[2] Enc Test ");
 
@@ -119,9 +119,9 @@ public class co_euc {
         System.out.println("<<< CubeLog :: byteEnc.length = [" + byteEnc.length+ "]");
         System.out.println("<<< CubeLog :: new String(byteEnc) = [" + new String(byteEnc) + "]");
 
-   for ( int i =0; i < byteEnc.length ; i++){
-           System.out.print(byteEnc[i]+",");
-   }
+		for(int i =0; i < byteEnc.length ; i++){
+			System.out.print(byteEnc[i]+",");
+		}
         /********************************************************************************/
         /********************************************************************************/
 
@@ -134,11 +134,6 @@ public class co_euc {
         System.out.println("<<< CubeLog :: decrypt = [" + decrypt + "]");
         System.out.println("<<< CubeLog :: errbyte = [" + new String(errbyte) + "]");
         System.out.println("<<< CubeLog :: decrypt.length() = [" +decrypt.length() + "]");
-
-
-
-
-
 
         System.out.println("\n#### Basic-Test(Hangul getBytes) :: Success..... !!!\n\n" );
 
