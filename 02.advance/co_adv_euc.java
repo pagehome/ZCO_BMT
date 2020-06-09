@@ -5,7 +5,7 @@ import java.util.*;
 
 public class co_adv_euc {
     // static String plain = "1234567890123";
-    static String plain = "ÀÏÀÌ»ï»ç¿ÀÀ°Ä¥";
+    static String plain = "ï¿½ï¿½ï¿½Ì»ï¿½ï¿½ï¿½ï¿½ï¿½Ä¥";
     static String item = "AES256" ;
     // static String item = "AES_LN_P" ;
 
@@ -42,7 +42,7 @@ public class co_adv_euc {
         System.out.println("####################################" );
 
         String encrypt = "" ; 
-	String decrypt = "" ;
+        String decrypt = "" ;
         System.out.println("\n<<< CubeLog :: ITEM = [" + item + "]");
 
         System.out.println("\n[1] Plain Test  ");

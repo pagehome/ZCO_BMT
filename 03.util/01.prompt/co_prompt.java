@@ -1,7 +1,3 @@
-
-
-
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import com.cubeone.CubeOneAPI;
@@ -94,7 +90,7 @@ public class co_prompt {
                     System.out.println("  - strlen(plain) = " + plain.length());
 
                     byte[] bytehan = plain.getBytes("EUC-KR");
-		    encOut = CubeOneAPI.coencbytes(bytehan,bytehan.length,item,11,"TBL","COL",errbyte);
+                    encOut = CubeOneAPI.coencbytes(bytehan,bytehan.length,item,11,"TBL","COL",errbyte);
 
                     if (errbyte[0] == 48 && errbyte[1] == 48 && errbyte[2] == 48 && errbyte[3] == 48 && errbyte[4] == 48 ){
                        System.out.println("  - encrypt = ["+encOut+"]");
@@ -113,7 +109,7 @@ public class co_prompt {
                     encrypt = brStr.readLine();
 
                     byte[] ret = CubeOneAPI.codecbyte(encrypt,item,11,null,null,errbyte);
-		    decOut = new String(ret,"EUC-KR");
+                    decOut = new String(ret,"EUC-KR");
 
                     if (errbyte[0] == 48 && errbyte[1] == 48 && errbyte[2] == 48 && errbyte[3] == 48 && errbyte[4] == 48 ){
                         System.out.println("  - decrypt = ["+decOut+"]");
