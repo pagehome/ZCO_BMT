@@ -1,6 +1,5 @@
 import com.cubeone.*;
 
-
 public class SaltEnc {
 
     public static void main(String[] args) throws Exception {

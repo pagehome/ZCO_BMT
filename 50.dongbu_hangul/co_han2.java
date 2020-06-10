@@ -97,7 +97,7 @@ public class co_han2
             strCol_varchar2 = rs.getString("col_varchar2");  
             strCol_hangul = rs.getString("col_hangul");  
 
-//            decCol_hangul = CubeOneAPI.codecchar(rs.getString("col_hangul"), strItem, 10, null, null, bytErr);  
+//          decCol_hangul = CubeOneAPI.codecchar(rs.getString("col_hangul"), strItem, 10, null, null, bytErr);  
 
             byte[] ret = CubeOneAPI.codecbyte(rs.getString("col_hangul"), strItem, 10, null, null, bytErr);  
             decCol_hangul = new String(ret,"EUC-KR");
@@ -117,9 +117,9 @@ public class co_han2
     static void insertEncTable() throws Exception {
 
         System.out.println("<<< [4] Insert Enc Table  ");
-// ÇѱÛ 
+// 
         String hangul = "1234567890123abcdÇѱÛÇѱÛ";
-//        byte[] bytehan = hangul.getBytes("KSC5601");
+//      byte[] bytehan = hangul.getBytes("KSC5601");
         byte[] bytehan = hangul.getBytes("EUC-KR");
 
         String sql = "INSERT INTO " + strEncTable + " (col_pk, col_varchar2, col_hangul, col_date)  VALUES( ?, ?, ?, sysdate)";

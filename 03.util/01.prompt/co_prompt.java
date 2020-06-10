@@ -5,7 +5,7 @@ import com.cubeone.CubeOneAPI;
 public class co_prompt {
     public static  void main(String args[]) {
         String encOut = "";
-	String decOut = "";
+        String decOut = "";
         String plain = "", encrypt = "";
         String menu = "";
         String item = "AES256";
