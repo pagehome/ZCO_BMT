@@ -53,7 +53,3 @@ INSERT INTO zcube_board#
   CONNECT BY LEVEL <= 100;      
 
 COMMIT;
-
-
-
-

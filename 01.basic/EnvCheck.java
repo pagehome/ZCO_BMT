@@ -4,7 +4,7 @@ import java.text.*;
 import com.cubeone.*;
 import java.util.*;
 
-public class co_bmt {
+public class EnvCheck {
 
     static String plain = "1234567890123";
     static String encrypt = "" ;
@@ -66,7 +66,7 @@ public class co_bmt {
             pw.flush();
             pw.close();
             
-            // data foler read 
+            // data folder read 
             brDataFile = new BufferedReader(new FileReader(dirData + "/KEYFILE_MSG"));
             while ((line = brDataFile.readLine()) != null) {
             	System.out.println(line);

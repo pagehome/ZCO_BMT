@@ -4,9 +4,9 @@ import com.cubeone.*;
 import java.util.*;
 
 public class co_adv_euc {
-    // static String plain = "1234567890123";
-    static String plain = "���̻�����ĥ";
-    static String item = "AES256" ;
+    static String plain = "1234567890123";
+    //static String plain = "";
+    static String item = "AES256-CBC" ;
     // static String item = "AES_LN_P" ;
 
     static String itemSalt = "SHA256_SALT" ;
@@ -23,13 +23,13 @@ public class co_adv_euc {
         // property();
            
         //Test basic API 
-        basic();
+        //basic();
 
         //Test Hangul
-        basic_getbyte();
+        //basic_getbyte();
 
         //Test hash-salt
-        basic_salt(); 
+        //basic_salt(); 
 
         //Test Ordered Index
         order();
